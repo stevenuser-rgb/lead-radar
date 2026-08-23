@@ -358,7 +358,11 @@
             <div class="pt-2 border-t border-slate-200">
               <div class="flex items-center space-x-2 mb-3">
                 <input type="checkbox" id="cfg-scan-enabled" {% if settings.scan_enabled == '1' %}checked{% endif %} class="w-4 h-4 text-indigo-600 rounded">
-                <label for="cfg-scan-enabled" class="text-xs font-semibold text-slate-700">啟用掃描系統（關閉後停止自動與手動掃描）</label>
+                <label for="cfg-scan-enabled" class="text-xs font-semibold text-slate-700">啟用 Threads 掃描系統（關閉後停止 Threads 自動與手動掃描）</label>
+              </div>
+              <div class="flex items-center space-x-2 mb-3">
+                <input type="checkbox" id="cfg-facebook-scan-enabled" {% if settings.facebook_scan_enabled == '1' %}checked{% endif %} class="w-4 h-4 text-blue-600 rounded">
+                <label for="cfg-facebook-scan-enabled" class="text-xs font-semibold text-slate-700">啟用 Facebook 掃描系統（關閉後停止 Facebook 自動與手動掃描）</label>
               </div>
               <div class="flex items-center space-x-2 mb-2">
                 <input type="checkbox" id="cfg-hours-limit" {% if settings.enable_hours_limit == '1' %}checked{% endif %} class="w-4 h-4 text-indigo-600 rounded">
@@ -553,6 +557,7 @@
       formData.append('confidence_threshold', document.getElementById('cfg-confidence').value);
       formData.append('collection_days', document.getElementById('cfg-collection-days').value);
       formData.append('scan_enabled', document.getElementById('cfg-scan-enabled').checked ? '1' : '0');
+      formData.append('facebook_scan_enabled', document.getElementById('cfg-facebook-scan-enabled').checked ? '1' : '0');
       formData.append('scan_interval_minutes', document.getElementById('cfg-interval').value);
       formData.append('enable_hours_limit', document.getElementById('cfg-hours-limit').checked ? '1' : '0');
       formData.append('active_start_hour', document.getElementById('cfg-start-hour').value);

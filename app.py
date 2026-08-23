@@ -87,6 +87,7 @@ async def index(request: Request):
         "confidence_threshold": get_setting("confidence_threshold", "0.75"),
         "collection_days": get_setting("collection_days", "7"),
         "scan_enabled": get_setting("scan_enabled", "1"),
+        "facebook_scan_enabled": get_setting("facebook_scan_enabled", "1"),
         "scan_interval_minutes": get_setting("scan_interval_minutes", "10"),
         "enable_hours_limit": get_setting("enable_hours_limit", "0"),
         "active_start_hour": get_setting("active_start_hour", "8"),
@@ -265,6 +266,7 @@ async def facebook_page(request: Request):
             "sources": get_facebook_sources(),
             "jobs": jobs,
             "posts": get_facebook_posts(limit=100),
+            "facebook_scan_enabled": get_setting("facebook_scan_enabled", "1") == "1",
             "runner_url": os.getenv("FACEBOOK_RUNNER_URL", "http://facebook-runner:9090"),
             "runner_available": runner_health() is not None,
         },
@@ -300,6 +302,8 @@ async def api_toggle_facebook_source(source_id: int, is_active: int = Form(...))
 
 @app.post("/api/facebook/jobs")
 async def api_create_facebook_job(source_id: int = Form(...)):
+    if get_setting("facebook_scan_enabled", "1") != "1":
+        return JSONResponse(status_code=403, content={"status": "error", "message": "Facebook 掃描系統目前已關閉，請先到系統設定開啟"})
     source = get_facebook_source(source_id)
     if not source:
         return JSONResponse(status_code=404, content={"status": "error", "message": "來源不存在"})
@@ -424,6 +428,7 @@ async def api_save_settings(
     confidence_threshold: str = Form("0.75"),
     collection_days: str = Form("7"),
     scan_enabled: str = Form("1"),
+    facebook_scan_enabled: str = Form("1"),
     scan_interval_minutes: str = Form("10"),
     enable_hours_limit: str = Form("0"),
     active_start_hour: str = Form("8"),
@@ -448,6 +453,7 @@ async def api_save_settings(
         days = 7
     set_setting("collection_days", str(days))
     set_setting("scan_enabled", "1" if scan_enabled == "1" else "0")
+    set_setting("facebook_scan_enabled", "1" if facebook_scan_enabled == "1" else "0")
     set_setting("scan_interval_minutes", scan_interval_minutes.strip())
     set_setting("enable_hours_limit", enable_hours_limit.strip())
     set_setting("active_start_hour", active_start_hour.strip())

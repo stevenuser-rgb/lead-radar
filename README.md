@@ -11,6 +11,7 @@
 4. **關鍵字與業務背景自訂**：支援最多 10 組關鍵字與自訂專業業務簡介（AI System Prompt Context）。
 5. **多管道即時推播**：支援 LINE Notify / LINE Messaging API (Bot)，命中時第一時間通報。
 6. **10 分鐘自動背景排程**：內建非同步排程器，每 10 分鐘自動執行一輪全網檢索與意圖分析。
+7. **Facebook 社團模組**：獨立管理社團來源、抓取任務、runner 日誌與貼文結果；抓取程式以相鄰的獨立 `facebook-public-group-scraper-standalone` 專案建置，不建立 fork 或原作者依賴。
 
 ---
 
@@ -36,3 +37,5 @@ uvicorn app:app --host 0.0.0.0 --port 8000 --reload
 docker build -t lead-radar-app .
 docker run -d -p 8000:8000 --name lead-radar lead-radar-app
 ```
+
+Facebook 社團模組的 Cupmen 部署方式與資料目錄，請參閱 [`DEPLOY_CUPMEN.md`](DEPLOY_CUPMEN.md)。

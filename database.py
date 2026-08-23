@@ -114,6 +114,59 @@ def init_db():
         value TEXT
     )
     """)
+
+    # 5. Facebook 社團來源、抓取任務與原始貼文
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS facebook_sources (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        group_url TEXT UNIQUE NOT NULL,
+        is_active INTEGER DEFAULT 1,
+        max_posts INTEGER DEFAULT 100,
+        no_proxy INTEGER DEFAULT 1,
+        cookies_file TEXT DEFAULT '',
+        last_job_id INTEGER,
+        last_job_status TEXT DEFAULT 'pending',
+        last_job_error TEXT DEFAULT '',
+        created_at TEXT DEFAULT (datetime('now', 'localtime')),
+        updated_at TEXT DEFAULT (datetime('now', 'localtime'))
+    )
+    """)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS facebook_jobs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        source_id INTEGER NOT NULL,
+        runner_job_id TEXT,
+        status TEXT DEFAULT 'queued',
+        group_url TEXT NOT NULL,
+        max_posts INTEGER DEFAULT 100,
+        created_at TEXT DEFAULT (datetime('now', 'localtime')),
+        started_at TEXT,
+        finished_at TEXT,
+        exit_code INTEGER,
+        error TEXT DEFAULT '',
+        output_dir TEXT DEFAULT '',
+        FOREIGN KEY(source_id) REFERENCES facebook_sources(id)
+    )
+    """)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS facebook_posts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        source_id INTEGER NOT NULL,
+        job_id INTEGER NOT NULL,
+        post_id TEXT NOT NULL,
+        author TEXT DEFAULT '',
+        content TEXT DEFAULT '',
+        post_url TEXT DEFAULT '',
+        publish_time TEXT DEFAULT '',
+        created_at TEXT DEFAULT (datetime('now', 'localtime')),
+        UNIQUE(job_id, post_id),
+        FOREIGN KEY(source_id) REFERENCES facebook_sources(id),
+        FOREIGN KEY(job_id) REFERENCES facebook_jobs(id)
+    )
+    """)
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_facebook_jobs_source ON facebook_jobs(source_id, id DESC)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_facebook_posts_source ON facebook_posts(source_id, id DESC)")
     
     # 一次性加入拆分後的高意圖、地區與問題型關鍵字，不覆寫使用者既有資料。
     recommended_keywords = [
@@ -155,6 +208,133 @@ def set_setting(key: str, value: str):
     cursor.execute("INSERT OR REPLACE INTO system_settings (key, value) VALUES (?, ?)", (key, value))
     conn.commit()
     conn.close()
+
+def get_facebook_sources(active_only: bool = False) -> List[Dict[str, Any]]:
+    conn = get_db()
+    cursor = conn.cursor()
+    query = "SELECT * FROM facebook_sources"
+    if active_only:
+        query += " WHERE is_active = 1"
+    query += " ORDER BY id DESC"
+    cursor.execute(query)
+    rows = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+    return rows
+
+def create_facebook_source(name: str, group_url: str, max_posts: int = 100, no_proxy: int = 1, cookies_file: str = "") -> Optional[int]:
+    conn = get_db()
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            """INSERT INTO facebook_sources (name, group_url, max_posts, no_proxy, cookies_file)
+               VALUES (?, ?, ?, ?, ?)""",
+            (name.strip() or group_url, group_url, max_posts, no_proxy, cookies_file.strip()),
+        )
+        conn.commit()
+        return cursor.lastrowid
+    except sqlite3.IntegrityError:
+        return None
+    finally:
+        conn.close()
+
+def toggle_facebook_source(source_id: int, is_active: int):
+    conn = get_db()
+    conn.execute(
+        "UPDATE facebook_sources SET is_active = ?, updated_at = datetime('now', 'localtime') WHERE id = ?",
+        (1 if is_active else 0, source_id),
+    )
+    conn.commit()
+    conn.close()
+
+def get_facebook_source(source_id: int) -> Optional[Dict[str, Any]]:
+    conn = get_db()
+    row = conn.execute("SELECT * FROM facebook_sources WHERE id = ?", (source_id,)).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+def create_facebook_job(source: Dict[str, Any]) -> int:
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute(
+        """INSERT INTO facebook_jobs (source_id, group_url, max_posts, status)
+           VALUES (?, ?, ?, 'queued')""",
+        (source["id"], source["group_url"], source["max_posts"]),
+    )
+    job_id = cursor.lastrowid
+    cursor.execute(
+        """UPDATE facebook_sources
+           SET last_job_id = ?, last_job_status = 'queued', last_job_error = '', updated_at = datetime('now', 'localtime')
+           WHERE id = ?""",
+        (job_id, source["id"]),
+    )
+    conn.commit()
+    conn.close()
+    return job_id
+
+def get_facebook_job(job_id: int) -> Optional[Dict[str, Any]]:
+    conn = get_db()
+    row = conn.execute("SELECT * FROM facebook_jobs WHERE id = ?", (job_id,)).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+def get_facebook_jobs(limit: int = 30) -> List[Dict[str, Any]]:
+    conn = get_db()
+    rows = conn.execute(
+        """SELECT j.*, s.name AS source_name
+           FROM facebook_jobs j JOIN facebook_sources s ON s.id = j.source_id
+           ORDER BY j.id DESC LIMIT ?""",
+        (limit,),
+    ).fetchall()
+    conn.close()
+    return [dict(row) for row in rows]
+
+def update_facebook_job(job_id: int, **fields):
+    allowed = {"runner_job_id", "status", "started_at", "finished_at", "exit_code", "error", "output_dir"}
+    values = [(key, value) for key, value in fields.items() if key in allowed]
+    if not values:
+        return
+    assignments = ", ".join(f"{key} = ?" for key, _ in values)
+    params = [value for _, value in values] + [job_id]
+    conn = get_db()
+    conn.execute(f"UPDATE facebook_jobs SET {assignments} WHERE id = ?", params)
+    if "status" in fields:
+        conn.execute(
+            """UPDATE facebook_sources SET last_job_status = ?, last_job_error = ?, updated_at = datetime('now', 'localtime')
+               WHERE id = (SELECT source_id FROM facebook_jobs WHERE id = ?)""",
+            (fields["status"], fields.get("error", ""), job_id),
+        )
+    conn.commit()
+    conn.close()
+
+def save_facebook_posts(job_id: int, source_id: int, posts: List[Dict[str, Any]]):
+    conn = get_db()
+    conn.executemany(
+        """INSERT OR IGNORE INTO facebook_posts
+           (source_id, job_id, post_id, author, content, post_url, publish_time)
+           VALUES (?, ?, ?, ?, ?, ?, ?)""",
+        [
+            (source_id, job_id, str(post.get("postId") or post.get("post_id") or post.get("id") or ""),
+             post.get("author", "") or post.get("authorName", ""),
+             post.get("content", "") or post.get("text", ""),
+             post.get("postUrl", "") or post.get("post_url", "") or post.get("url", ""),
+             post.get("publishTime", "") or post.get("publish_time", "") or post.get("createdAt", ""))
+            for post in posts
+            if post.get("postId") or post.get("post_id") or post.get("id")
+        ],
+    )
+    conn.commit()
+    conn.close()
+
+def get_facebook_posts(limit: int = 100) -> List[Dict[str, Any]]:
+    conn = get_db()
+    rows = conn.execute(
+        """SELECT p.*, s.name AS source_name
+           FROM facebook_posts p JOIN facebook_sources s ON s.id = p.source_id
+           ORDER BY p.id DESC LIMIT ?""",
+        (limit,),
+    ).fetchall()
+    conn.close()
+    return [dict(row) for row in rows]
 
 def get_all_keywords(active_only: bool = False) -> List[Dict[str, Any]]:
     conn = get_db()

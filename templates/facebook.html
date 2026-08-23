@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Facebook 社團 | Lead Radar</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans min-h-screen">
+  <header class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center text-white text-xl shadow-md"><i class="fa-brands fa-facebook"></i></div>
+        <div>
+          <h1 class="text-lg font-bold text-slate-900 leading-tight">Lead Radar｜Facebook 社團</h1>
+          <p class="text-xs text-slate-500">社團來源、抓取任務與貼文結果</p>
+        </div>
+      </div>
+      <nav class="flex items-center gap-2 text-sm">
+        <a href="/" class="px-3 py-2 rounded-lg text-slate-600 hover:bg-slate-100"><i class="fa-solid fa-chart-line mr-1"></i>儀表板</a>
+        <a href="/facebook" class="px-3 py-2 rounded-lg bg-blue-50 text-blue-700 font-semibold"><i class="fa-brands fa-facebook mr-1"></i>Facebook 社團</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+    <div class="flex flex-col md:flex-row md:items-end md:justify-between gap-2">
+      <div>
+        <h2 class="text-xl font-bold text-slate-900">Facebook 社團</h2>
+        <p class="text-sm text-slate-500 mt-1">只抓取你有權限看見的公開或登入後可見內容。抓取服務與 Lead Radar 分開執行。</p>
+      </div>
+      <div class="text-xs px-3 py-2 rounded-lg border {% if runner_available %}border-emerald-200 bg-emerald-50 text-emerald-700{% else %}border-amber-200 bg-amber-50 text-amber-700{% endif %}">
+        <i class="fa-solid fa-circle mr-1"></i>{% if runner_available %}抓取服務已連線{% else %}抓取服務未連線{% endif %}
+      </div>
+    </div>
+
+    <section class="grid grid-cols-1 xl:grid-cols-3 gap-6">
+      <div class="xl:col-span-1 bg-white rounded-xl border border-slate-200 shadow-sm p-5">
+        <div class="flex items-center justify-between mb-4">
+          <div><h3 class="font-bold text-slate-900">社團來源管理</h3><p class="text-xs text-slate-500 mt-1">先加入來源，再啟動抓取任務</p></div>
+          <i class="fa-solid fa-link text-blue-600"></i>
+        </div>
+        <form id="source-form" class="space-y-3">
+          <label class="block"><span class="text-xs font-semibold text-slate-600">來源名稱</span><input name="name" placeholder="例如：桃園廠房社團" class="mt-1 w-full rounded-lg border-slate-300 text-sm"></label>
+          <label class="block"><span class="text-xs font-semibold text-slate-600">社團網址</span><input name="group_url" required placeholder="https://www.facebook.com/groups/..." class="mt-1 w-full rounded-lg border-slate-300 text-sm"></label>
+          <div class="grid grid-cols-2 gap-3">
+            <label class="block"><span class="text-xs font-semibold text-slate-600">最多貼文數</span><input name="max_posts" type="number" min="1" max="5000" value="100" class="mt-1 w-full rounded-lg border-slate-300 text-sm"></label>
+            <label class="flex items-end gap-2 pb-2 text-sm"><input name="no_proxy" type="checkbox" value="1" checked class="rounded border-slate-300 text-blue-600"><span>直接連線</span></label>
+          </div>
+          <details class="rounded-lg bg-slate-50 border border-slate-200 p-3">
+            <summary class="cursor-pointer text-sm font-semibold text-slate-700">Cookie／進階設定</summary>
+            <label class="block mt-3"><span class="text-xs text-slate-600">容器內 cookies.json 路徑（可留白）</span><input name="cookies_file" placeholder="/app/cookies/cookies.json" class="mt-1 w-full rounded-lg border-slate-300 text-sm"></label>
+            <p class="text-[11px] text-slate-500 mt-2">只填路徑；Cookie 檔案請放在 Cupmen 的 data/facebook-cookies，不要提交到 Git。</p>
+          </details>
+          <button class="w-full px-4 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold"><i class="fa-solid fa-plus mr-1"></i>加入社團來源</button>
+        </form>
+        <p id="source-message" class="text-xs mt-3"></p>
+      </div>
+
+      <div class="xl:col-span-2 bg-white rounded-xl border border-slate-200 shadow-sm p-5">
+        <div class="flex items-center justify-between mb-4"><div><h3 class="font-bold text-slate-900">已加入的社團來源</h3><p class="text-xs text-slate-500 mt-1">停用來源不會被啟動新任務</p></div><span class="text-xs text-slate-400">{{ sources|length }} 個來源</span></div>
+        <div class="overflow-x-auto"><table class="w-full text-left text-sm"><thead class="text-xs text-slate-500 border-b border-slate-200"><tr><th class="py-2 pr-3">名稱</th><th class="py-2 pr-3">網址</th><th class="py-2 pr-3">設定</th><th class="py-2 text-right">操作</th></tr></thead><tbody>
+        {% for source in sources %}
+          <tr class="border-b border-slate-100"><td class="py-3 pr-3 font-semibold text-slate-800">{{ source.name }}</td><td class="py-3 pr-3 max-w-[260px] truncate text-xs text-slate-500" title="{{ source.group_url }}">{{ source.group_url }}</td><td class="py-3 pr-3 text-xs text-slate-500">{{ source.max_posts }} 篇 · {% if source.no_proxy %}直接{% else %}Proxy{% endif %} · <span class="{% if source.is_active %}text-emerald-600{% else %}text-slate-400{% endif %}">{% if source.is_active %}啟用{% else %}停用{% endif %}</span></td><td class="py-3 text-right whitespace-nowrap"><button onclick="toggleSource({{ source.id }}, {{ 0 if source.is_active else 1 }})" class="text-xs px-2 py-1 rounded border border-slate-300 text-slate-600 hover:bg-slate-50 mr-1">{% if source.is_active %}停用{% else %}啟用{% endif %}</button><button {% if not source.is_active %}disabled{% endif %} onclick="runJob({{ source.id }})" class="text-xs px-2 py-1 rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-40"><i class="fa-solid fa-play mr-1"></i>抓取</button></td></tr>
+        {% else %}<tr><td colspan="4" class="py-8 text-center text-sm text-slate-400">尚未加入社團來源</td></tr>{% endfor %}
+        </tbody></table></div>
+      </div>
+    </section>
+
+    <section class="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
+      <div class="flex items-center justify-between mb-4"><div><h3 class="font-bold text-slate-900">抓取任務</h3><p class="text-xs text-slate-500 mt-1">任務狀態保留在 Lead Radar；抓取程序由獨立 runner 執行</p></div><button onclick="location.reload()" class="text-xs px-3 py-2 rounded-lg border border-slate-300 text-slate-600 hover:bg-slate-50"><i class="fa-solid fa-rotate mr-1"></i>更新</button></div>
+      <div class="overflow-x-auto"><table class="w-full text-left text-sm"><thead class="text-xs text-slate-500 border-b border-slate-200"><tr><th class="py-2 pr-3">任務</th><th class="py-2 pr-3">來源</th><th class="py-2 pr-3">狀態</th><th class="py-2 pr-3">建立時間</th><th class="py-2 text-right">操作</th></tr></thead><tbody>
+      {% for job in jobs %}<tr class="border-b border-slate-100"><td class="py-3 pr-3 font-mono text-xs">#{{ job.id }}</td><td class="py-3 pr-3">{{ job.source_name }}</td><td class="py-3 pr-3"><span class="status-{{ job.status }} px-2 py-1 rounded-full text-xs">{{ job.status }}</span>{% if job.error %}<div class="text-[11px] text-red-600 mt-1 max-w-md">{{ job.error }}</div>{% endif %}</td><td class="py-3 pr-3 text-xs text-slate-500">{{ job.created_at }}</td><td class="py-3 text-right whitespace-nowrap"><button onclick="showLogs({{ job.id }})" class="text-xs px-2 py-1 rounded border border-slate-300 text-slate-600 hover:bg-slate-50">日誌</button>{% if job.status == 'running' %}<button onclick="cancelJob({{ job.id }})" class="text-xs px-2 py-1 rounded border border-red-200 text-red-600 hover:bg-red-50 ml-1">取消</button>{% endif %}</td></tr>
+      {% else %}<tr><td colspan="5" class="py-8 text-center text-sm text-slate-400">尚未建立抓取任務</td></tr>{% endfor %}
+      </tbody></table></div>
+    </section>
+
+    <section class="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
+      <div class="flex items-center justify-between mb-4"><div><h3 class="font-bold text-slate-900">貼文結果</h3><p class="text-xs text-slate-500 mt-1">原始貼文先保存於 Facebook 模組，可再接入命中需求分析</p></div><span class="text-xs text-slate-400">最近 {{ posts|length }} 筆</span></div>
+      <div class="overflow-x-auto"><table class="w-full text-left text-sm"><thead class="text-xs text-slate-500 border-b border-slate-200"><tr><th class="py-2 pr-3">來源</th><th class="py-2 pr-3">作者</th><th class="py-2 pr-3">內容</th><th class="py-2 pr-3">時間</th><th class="py-2 text-right">連結</th></tr></thead><tbody>
+      {% for post in posts %}<tr class="border-b border-slate-100 align-top"><td class="py-3 pr-3 text-xs text-slate-600">{{ post.source_name }}</td><td class="py-3 pr-3 text-xs">{{ post.author or '未提供' }}</td><td class="py-3 pr-3 max-w-xl whitespace-pre-wrap text-sm">{{ post.content[:500] }}{% if post.content|length > 500 %}…{% endif %}</td><td class="py-3 pr-3 text-xs text-slate-500 whitespace-nowrap">{{ post.publish_time or '未提供' }}</td><td class="py-3 text-right">{% if post.post_url %}<a href="{{ post.post_url }}" target="_blank" rel="noreferrer" class="text-blue-600 hover:text-blue-800"><i class="fa-solid fa-arrow-up-right-from-square"></i></a>{% endif %}</td></tr>
+      {% else %}<tr><td colspan="5" class="py-8 text-center text-sm text-slate-400">尚未匯入貼文結果</td></tr>{% endfor %}
+      </tbody></table></div>
+    </section>
+  </main>
+
+  <div id="log-dialog" class="hidden fixed inset-0 bg-slate-900/40 z-50 p-4"><div class="max-w-4xl mx-auto mt-16 bg-slate-950 rounded-xl shadow-xl overflow-hidden"><div class="flex items-center justify-between px-4 py-3 text-white"><span class="font-semibold">抓取日誌</span><button onclick="closeLogs()" class="text-slate-300 hover:text-white"><i class="fa-solid fa-xmark"></i></button></div><pre id="log-content" class="p-4 text-xs text-slate-200 whitespace-pre-wrap max-h-[70vh] overflow-auto"></pre></div></div>
+
+  <script>
+    async function parseResponse(response) { const data = await response.json(); if (!response.ok) throw new Error(data.message || '操作失敗'); return data; }
+    function message(text, error = false) { const el = document.getElementById('source-message'); el.textContent = text; el.className = `text-xs mt-3 ${error ? 'text-red-600' : 'text-emerald-600'}`; }
+    document.getElementById('source-form').addEventListener('submit', async (event) => { event.preventDefault(); message('儲存中…'); try { const form = new FormData(event.target); if (!form.get('no_proxy')) form.set('no_proxy', '0'); await parseResponse(await fetch('/api/facebook/sources', { method: 'POST', body: form })); message('來源已加入'); setTimeout(() => location.reload(), 400); } catch (error) { message(error.message, true); } });
+    async function toggleSource(id, active) { try { const form = new FormData(); form.set('is_active', active); await parseResponse(await fetch(`/api/facebook/sources/${id}/toggle`, { method: 'POST', body: form })); location.reload(); } catch (error) { alert(error.message); } }
+    async function runJob(sourceId) { try { const form = new FormData(); form.set('source_id', sourceId); await parseResponse(await fetch('/api/facebook/jobs', { method: 'POST', body: form })); location.reload(); } catch (error) { alert(error.message); } }
+    async function cancelJob(id) { if (!confirm('確定取消這個抓取任務？')) return; try { await parseResponse(await fetch(`/api/facebook/jobs/${id}/cancel`, { method: 'POST' })); location.reload(); } catch (error) { alert(error.message); } }
+    async function showLogs(id) { const dialog = document.getElementById('log-dialog'); const content = document.getElementById('log-content'); dialog.classList.remove('hidden'); content.textContent = '讀取中…'; try { const data = await parseResponse(await fetch(`/api/facebook/jobs/${id}/logs`)); content.textContent = data.content || '目前沒有日誌'; } catch (error) { content.textContent = error.message; } }
+    function closeLogs() { document.getElementById('log-dialog').classList.add('hidden'); }
+  </script>
+  <style>
+    .status-running { background: #dbeafe; color: #1d4ed8; }
+    .status-completed { background: #dcfce7; color: #15803d; }
+    .status-failed, .status-cancelled { background: #fee2e2; color: #b91c1c; }
+    .status-queued { background: #fef3c7; color: #a16207; }
+  </style>
+</body>
+</html>

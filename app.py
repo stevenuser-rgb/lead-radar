@@ -1,4 +1,7 @@
 import asyncio
+import os
+import datetime
+from urllib.parse import urlparse
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, Form, BackgroundTasks
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -15,12 +18,31 @@ from database import (
     get_skipped_logs,
     get_summary_stats,
     get_setting,
-    set_setting
+    set_setting,
+    get_facebook_sources,
+    create_facebook_source,
+    toggle_facebook_source,
+    get_facebook_source,
+    create_facebook_job,
+    get_facebook_job,
+    get_facebook_jobs,
+    update_facebook_job,
+    save_facebook_posts,
+    get_facebook_posts,
 )
 from scheduler import background_scheduler_loop, run_scan_cycle, get_next_scan_time_str
 from notifier import send_lead_notification
 from scraper import ThreadsSearchError, fetch_threads_posts, fetch_apify_posts
 from ai_engine import call_gemini_api
+from facebook_runner import (
+    FacebookRunnerError,
+    cancel_runner_job,
+    get_runner_job,
+    get_runner_logs,
+    get_runner_posts,
+    runner_health,
+    submit_facebook_job,
+)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -68,6 +90,150 @@ async def index(request: Request):
             "settings": settings,
         },
     )
+
+
+def _normalize_facebook_group_url(group_url: str) -> str:
+    parsed = urlparse(group_url.strip())
+    if parsed.scheme not in {"http", "https"} or parsed.netloc.lower() not in {"facebook.com", "www.facebook.com", "m.facebook.com"}:
+        raise ValueError("請填入 facebook.com/groups/... 的社團網址")
+    parts = [part for part in parsed.path.split("/") if part]
+    if len(parts) < 2 or parts[0].lower() != "groups":
+        raise ValueError("請填入 facebook.com/groups/... 的社團網址")
+    return f"https://www.facebook.com/groups/{parts[1]}/"
+
+
+def _sync_facebook_job(job: dict) -> dict:
+    """Refresh local job state and persist completed runner output."""
+    if not job.get("runner_job_id"):
+        return job
+    try:
+        remote = get_runner_job(job["runner_job_id"])
+    except FacebookRunnerError as exc:
+        job["runner_error"] = str(exc)
+        return job
+
+    status = remote.get("status", job.get("status", "queued"))
+    update_facebook_job(
+        job["id"],
+        status=status,
+        started_at=remote.get("startedAt"),
+        finished_at=remote.get("finishedAt"),
+        exit_code=remote.get("exitCode"),
+        error=remote.get("error") or "",
+        output_dir=remote.get("outputDir") or "",
+    )
+    if status == "completed":
+        try:
+            payload = get_runner_posts(job["runner_job_id"])
+            save_facebook_posts(job["id"], job["source_id"], payload.get("posts", []))
+        except FacebookRunnerError as exc:
+            job["runner_error"] = str(exc)
+    job.update(
+        status=status,
+        started_at=remote.get("startedAt"),
+        finished_at=remote.get("finishedAt"),
+        exit_code=remote.get("exitCode"),
+        error=remote.get("error") or "",
+        output_dir=remote.get("outputDir") or "",
+    )
+    return job
+
+
+@app.get("/facebook", response_class=HTMLResponse)
+async def facebook_page(request: Request):
+    jobs = [_sync_facebook_job(job) for job in get_facebook_jobs(limit=30)]
+    return templates.TemplateResponse(
+        request=request,
+        name="facebook.html",
+        context={
+            "sources": get_facebook_sources(),
+            "jobs": jobs,
+            "posts": get_facebook_posts(limit=100),
+            "runner_url": os.getenv("FACEBOOK_RUNNER_URL", "http://facebook-runner:9090"),
+            "runner_available": runner_health() is not None,
+        },
+    )
+
+
+@app.post("/api/facebook/sources")
+async def api_create_facebook_source(
+    name: str = Form(""),
+    group_url: str = Form(...),
+    max_posts: str = Form("100"),
+    no_proxy: str = Form("1"),
+    cookies_file: str = Form(""),
+):
+    try:
+        normalized_url = _normalize_facebook_group_url(group_url)
+        parsed_max_posts = min(5000, max(1, int(max_posts)))
+    except (ValueError, TypeError):
+        return JSONResponse(status_code=400, content={"status": "error", "message": "社團網址或貼文上限格式不正確"})
+    source_id = create_facebook_source(name, normalized_url, parsed_max_posts, 1 if no_proxy == "1" else 0, cookies_file)
+    if source_id is None:
+        return JSONResponse(status_code=409, content={"status": "error", "message": "這個社團網址已經加入來源"})
+    return {"status": "ok", "source_id": source_id}
+
+
+@app.post("/api/facebook/sources/{source_id}/toggle")
+async def api_toggle_facebook_source(source_id: int, is_active: int = Form(...)):
+    if not get_facebook_source(source_id):
+        return JSONResponse(status_code=404, content={"status": "error", "message": "來源不存在"})
+    toggle_facebook_source(source_id, is_active)
+    return {"status": "ok"}
+
+
+@app.post("/api/facebook/jobs")
+async def api_create_facebook_job(source_id: int = Form(...)):
+    source = get_facebook_source(source_id)
+    if not source:
+        return JSONResponse(status_code=404, content={"status": "error", "message": "來源不存在"})
+    if not source["is_active"]:
+        return JSONResponse(status_code=400, content={"status": "error", "message": "請先啟用這個社團來源"})
+    job_id = create_facebook_job(source)
+    try:
+        remote = submit_facebook_job(
+            source["group_url"],
+            int(source["max_posts"]),
+            bool(source["no_proxy"]),
+            source.get("cookies_file", ""),
+        )
+        update_facebook_job(job_id, runner_job_id=remote.get("id"), status=remote.get("status", "running"), started_at=remote.get("startedAt"))
+        return {"status": "ok", "job_id": job_id, "runner_job_id": remote.get("id")}
+    except FacebookRunnerError as exc:
+        update_facebook_job(job_id, status="failed", error=str(exc), finished_at=datetime.datetime.now().isoformat(timespec="seconds"))
+        return JSONResponse(status_code=503, content={"status": "error", "message": str(exc), "job_id": job_id})
+
+
+@app.get("/api/facebook/jobs/{job_id}")
+async def api_get_facebook_job(job_id: int):
+    job = get_facebook_job(job_id)
+    if not job:
+        return JSONResponse(status_code=404, content={"status": "error", "message": "任務不存在"})
+    return {"status": "ok", "job": _sync_facebook_job(job)}
+
+
+@app.get("/api/facebook/jobs/{job_id}/logs")
+async def api_get_facebook_job_logs(job_id: int):
+    job = get_facebook_job(job_id)
+    if not job or not job.get("runner_job_id"):
+        return JSONResponse(status_code=404, content={"status": "error", "message": "任務尚未連接 runner"})
+    try:
+        return {"status": "ok", **get_runner_logs(job["runner_job_id"])}
+    except FacebookRunnerError as exc:
+        return JSONResponse(status_code=503, content={"status": "error", "message": str(exc)})
+
+
+@app.post("/api/facebook/jobs/{job_id}/cancel")
+async def api_cancel_facebook_job(job_id: int):
+    job = get_facebook_job(job_id)
+    if not job or not job.get("runner_job_id"):
+        return JSONResponse(status_code=404, content={"status": "error", "message": "任務不存在或尚未啟動"})
+    try:
+        remote = cancel_runner_job(job["runner_job_id"])
+        update_facebook_job(job_id, status="cancelled", finished_at=remote.get("finishedAt"), error=remote.get("error") or "")
+        return {"status": "ok"}
+    except FacebookRunnerError as exc:
+        return JSONResponse(status_code=503, content={"status": "error", "message": str(exc)})
 
 # API: 觸發手動強制掃描
 @app.post("/api/scan")

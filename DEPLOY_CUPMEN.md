@@ -31,6 +31,8 @@ http://127.0.0.1:8010
 
 開啟後從頂部導覽進入「Facebook 社團」，再依序填寫社團來源、貼文上限與（需要時）容器內 Cookie 路徑。抓取任務由 `facebook-runner` 執行，結果會寫入 `data/facebook-output`，來源、任務與貼文索引會寫入 `data/radar.db`。
 
+帳號安全限制：Facebook 抓取維持手動啟動，單次最多 500 篇，同一社團完成後預設至少等待 30 分鐘；不自動登入、不解 CAPTCHA、不執行發文或互動，也不以 Proxy 繞過封鎖。若 Facebook 顯示 checkpoint、驗證或存取警告，應立即停止任務並檢查授權與平台規範。
+
 區域網路測試時，將 `docker-compose.yml` 的：
 
 ```yaml

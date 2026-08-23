@@ -1,6 +1,7 @@
 import asyncio
 import os
 import datetime
+import re
 from urllib.parse import urlparse
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, Form, BackgroundTasks
@@ -61,6 +62,13 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="私有需求雷達 (Lead Radar)", lifespan=lifespan)
 templates = Jinja2Templates(directory="templates")
 FACEBOOK_ANALYSIS_JOBS = set()
+FACEBOOK_MAX_POSTS = 500
+FACEBOOK_MIN_JOB_INTERVAL_MINUTES = max(1, int(os.getenv("FACEBOOK_MIN_JOB_INTERVAL_MINUTES", "30")))
+FACEBOOK_KEYWORD_TERMS = (
+    "特定目的事業用地", "特定工廠登記", "農地工廠合法化", "工廠合法化", "丁種建築用地",
+    "工業地", "廠房", "倉庫", "農地", "工廠", "合法化", "用地", "變更", "登記", "申請", "違章",
+    "出租", "出售", "分租", "租", "買", "找", "推薦", "仲介", "桃園", "八德", "大溪", "龍潭", "平鎮", "鶯歌",
+)
 
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
@@ -110,6 +118,17 @@ def _normalize_facebook_group_url(group_url: str) -> str:
     return f"https://www.facebook.com/groups/{parts[1]}/"
 
 
+def _facebook_keyword_matches(keyword: str, content: str) -> bool:
+    normalized_keyword = re.sub(r"\s+", "", keyword).casefold()
+    normalized_content = re.sub(r"\s+", "", content).casefold()
+    if not normalized_keyword or normalized_keyword in normalized_content:
+        return bool(normalized_keyword)
+
+    terms = [term.casefold() for term in FACEBOOK_KEYWORD_TERMS if term in normalized_keyword]
+    # Flexible matching handles natural variants such as "廠房分租" vs "租廠房".
+    return len(terms) >= 2 and all(term in normalized_content for term in terms)
+
+
 def _analyze_facebook_job(job_id: int):
     """Match imported Facebook posts to active keywords and run the shared AI classifier."""
     try:
@@ -125,8 +144,7 @@ def _analyze_facebook_job(job_id: int):
 
         for post in posts:
             content = str(post.get("content") or "")
-            content_folded = content.casefold()
-            matches = [item for item in keywords if item["keyword"].strip().casefold() in content_folded]
+            matches = [item for item in keywords if _facebook_keyword_matches(item["keyword"], content)]
             if not matches:
                 update_facebook_post_analysis(post["id"], "unmatched")
                 continue
@@ -192,6 +210,12 @@ def _queue_facebook_analysis(job_id: int):
     asyncio.create_task(asyncio.to_thread(_analyze_facebook_job, job_id))
 
 
+def _queue_completed_facebook_analysis():
+    for job in get_facebook_jobs(limit=100):
+        if job.get("status") == "completed":
+            _queue_facebook_analysis(job["id"])
+
+
 def _sync_facebook_job(job: dict) -> dict:
     """Refresh local job state and persist completed runner output."""
     if not job.get("runner_job_id"):
@@ -233,6 +257,7 @@ def _sync_facebook_job(job: dict) -> dict:
 @app.get("/facebook", response_class=HTMLResponse)
 async def facebook_page(request: Request):
     jobs = [_sync_facebook_job(job) for job in get_facebook_jobs(limit=30)]
+    _queue_completed_facebook_analysis()
     return templates.TemplateResponse(
         request=request,
         name="facebook.html",
@@ -256,7 +281,7 @@ async def api_create_facebook_source(
 ):
     try:
         normalized_url = _normalize_facebook_group_url(group_url)
-        parsed_max_posts = min(5000, max(1, int(max_posts)))
+        parsed_max_posts = min(FACEBOOK_MAX_POSTS, max(1, int(max_posts)))
     except (ValueError, TypeError):
         return JSONResponse(status_code=400, content={"status": "error", "message": "社團網址或貼文上限格式不正確"})
     source_id = create_facebook_source(name, normalized_url, parsed_max_posts, 1 if no_proxy == "1" else 0, cookies_file)
@@ -280,6 +305,20 @@ async def api_create_facebook_job(source_id: int = Form(...)):
         return JSONResponse(status_code=404, content={"status": "error", "message": "來源不存在"})
     if not source["is_active"]:
         return JSONResponse(status_code=400, content={"status": "error", "message": "請先啟用這個社團來源"})
+    recent_jobs = [job for job in get_facebook_jobs(limit=100) if job.get("source_id") == source_id]
+    if any(job.get("status") in {"queued", "running"} for job in recent_jobs):
+        return JSONResponse(status_code=409, content={"status": "error", "message": "這個社團已有抓取任務執行中，請等待完成"})
+    latest_completed = next((job for job in recent_jobs if job.get("status") == "completed"), None)
+    if latest_completed:
+        try:
+            created_at = datetime.datetime.strptime(latest_completed["created_at"], "%Y-%m-%d %H:%M:%S")
+            elapsed_minutes = (datetime.datetime.now() - created_at).total_seconds() / 60
+            if elapsed_minutes < FACEBOOK_MIN_JOB_INTERVAL_MINUTES:
+                wait_minutes = max(1, int(FACEBOOK_MIN_JOB_INTERVAL_MINUTES - elapsed_minutes))
+                return JSONResponse(status_code=429, content={"status": "error", "message": f"為降低帳號風險，請約 {wait_minutes} 分鐘後再抓取"})
+        except (KeyError, TypeError, ValueError):
+            pass
+    source["max_posts"] = min(FACEBOOK_MAX_POSTS, int(source.get("max_posts") or 100))
     job_id = create_facebook_job(source)
     try:
         remote = submit_facebook_job(
@@ -339,6 +378,7 @@ async def trigger_scan(background_tasks: BackgroundTasks):
 async def api_add_keyword(keyword: str = Form(...), business_description: str = Form(...)):
     success = add_keyword(keyword, business_description)
     if success:
+        _queue_completed_facebook_analysis()
         return {"status": "ok"}
     return JSONResponse(status_code=400, content={"status": "error", "message": "關鍵字已存在或無效"})
 
@@ -357,6 +397,7 @@ async def api_update_keyword(
         return JSONResponse(status_code=400, content={"status": "error", "message": "關鍵字不可為空白"})
     if not update_keyword(kw_id, keyword, business_description):
         return JSONResponse(status_code=409, content={"status": "error", "message": "關鍵字已存在，請換一個名稱"})
+    _queue_completed_facebook_analysis()
     return {"status": "ok"}
 
 @app.post("/api/keywords/{kw_id}/delete")

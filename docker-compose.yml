@@ -8,6 +8,7 @@ services:
       TZ: Asia/Taipei
       DB_PATH: /data/radar.db
       FACEBOOK_RUNNER_URL: http://facebook-runner:9090
+      FACEBOOK_MIN_JOB_INTERVAL_MINUTES: 30
     ports:
       # Bind only to the explicitly configured LAN address (defaults to localhost).
       - "${LAN_BIND_IP:-127.0.0.1}:8010:8000"

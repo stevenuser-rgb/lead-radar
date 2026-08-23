@@ -356,7 +356,7 @@ def get_facebook_posts_for_job(job_id: int, pending_only: bool = False) -> List[
     query = "SELECT * FROM facebook_posts WHERE job_id = ?"
     params: List[Any] = [job_id]
     if pending_only:
-        query += " AND analysis_status = 'pending'"
+        query += " AND analysis_status IN ('pending', 'unmatched')"
     query += " ORDER BY id ASC"
     rows = conn.execute(query, params).fetchall()
     conn.close()

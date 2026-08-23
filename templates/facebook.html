@@ -78,9 +78,9 @@
 
     <section class="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
       <div class="flex items-center justify-between mb-4"><div><h3 class="font-bold text-slate-900">貼文結果</h3><p class="text-xs text-slate-500 mt-1">原始貼文先保存於 Facebook 模組，可再接入命中需求分析</p></div><span class="text-xs text-slate-400">最近 {{ posts|length }} 筆</span></div>
-      <div class="overflow-x-auto"><table class="w-full text-left text-sm"><thead class="text-xs text-slate-500 border-b border-slate-200"><tr><th class="py-2 pr-3">來源</th><th class="py-2 pr-3">作者</th><th class="py-2 pr-3">內容</th><th class="py-2 pr-3">時間</th><th class="py-2 text-right">連結</th></tr></thead><tbody>
-      {% for post in posts %}<tr class="border-b border-slate-100 align-top"><td class="py-3 pr-3 text-xs text-slate-600">{{ post.source_name }}</td><td class="py-3 pr-3 text-xs">{{ post.author or '未提供' }}</td><td class="py-3 pr-3 max-w-xl whitespace-pre-wrap text-sm">{{ post.content[:500] }}{% if post.content|length > 500 %}…{% endif %}</td><td class="py-3 pr-3 text-xs text-slate-500 whitespace-nowrap">{{ post.publish_time or '未提供' }}</td><td class="py-3 text-right">{% if post.post_url %}<a href="{{ post.post_url }}" target="_blank" rel="noreferrer" class="text-blue-600 hover:text-blue-800"><i class="fa-solid fa-arrow-up-right-from-square"></i></a>{% endif %}</td></tr>
-      {% else %}<tr><td colspan="5" class="py-8 text-center text-sm text-slate-400">尚未匯入貼文結果</td></tr>{% endfor %}
+      <div class="overflow-x-auto"><table class="w-full text-left text-sm"><thead class="text-xs text-slate-500 border-b border-slate-200"><tr><th class="py-2 pr-3">來源</th><th class="py-2 pr-3">作者</th><th class="py-2 pr-3">內容</th><th class="py-2 pr-3">分析</th><th class="py-2 pr-3">時間</th><th class="py-2 text-right">連結</th></tr></thead><tbody>
+      {% for post in posts %}<tr class="border-b border-slate-100 align-top"><td class="py-3 pr-3 text-xs text-slate-600">{{ post.source_name }}</td><td class="py-3 pr-3 text-xs">{{ post.author or '未提供' }}</td><td class="py-3 pr-3 max-w-xl whitespace-pre-wrap text-sm">{{ post.content[:500] }}{% if post.content|length > 500 %}…{% endif %}</td><td class="py-3 pr-3 text-xs whitespace-nowrap"><span class="analysis-{{ post.analysis_status }} px-2 py-1 rounded-full">{{ {'lead': '命中需求', 'skipped': '略過', 'unmatched': '未命中關鍵字', 'duplicate': '重複', 'error': '分析錯誤', 'pending': '待分析'}.get(post.analysis_status, post.analysis_status) }}</span>{% if post.matched_keyword %}<div class="text-[11px] text-slate-500 mt-1">{{ post.matched_keyword }}</div>{% endif %}</td><td class="py-3 pr-3 text-xs text-slate-500 whitespace-nowrap">{{ post.publish_time or '未提供' }}</td><td class="py-3 text-right">{% if post.post_url %}<a href="{{ post.post_url }}" target="_blank" rel="noreferrer" class="text-blue-600 hover:text-blue-800"><i class="fa-solid fa-arrow-up-right-from-square"></i></a>{% endif %}</td></tr>
+      {% else %}<tr><td colspan="6" class="py-8 text-center text-sm text-slate-400">尚未匯入貼文結果</td></tr>{% endfor %}
       </tbody></table></div>
     </section>
   </main>
@@ -102,6 +102,10 @@
     .status-completed { background: #dcfce7; color: #15803d; }
     .status-failed, .status-cancelled { background: #fee2e2; color: #b91c1c; }
     .status-queued { background: #fef3c7; color: #a16207; }
+    .analysis-lead { background: #dcfce7; color: #15803d; }
+    .analysis-skipped, .analysis-duplicate { background: #fef3c7; color: #a16207; }
+    .analysis-unmatched, .analysis-pending { background: #f1f5f9; color: #64748b; }
+    .analysis-error { background: #fee2e2; color: #b91c1c; }
   </style>
 </body>
 </html>

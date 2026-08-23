@@ -29,12 +29,18 @@ from database import (
     update_facebook_job,
     save_facebook_posts,
     get_facebook_posts,
+    get_facebook_posts_for_job,
+    update_facebook_post_analysis,
     update_keyword,
+    is_post_duplicate,
+    save_lead,
+    save_skipped,
 )
 from scheduler import background_scheduler_loop, run_scan_cycle, get_next_scan_time_str
 from notifier import send_lead_notification
 from scraper import ThreadsSearchError, fetch_threads_posts, fetch_apify_posts
 from ai_engine import call_gemini_api
+from ai_engine import analyze_post_intent
 from facebook_runner import (
     FacebookRunnerError,
     cancel_runner_job,
@@ -54,6 +60,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="私有需求雷達 (Lead Radar)", lifespan=lifespan)
 templates = Jinja2Templates(directory="templates")
+FACEBOOK_ANALYSIS_JOBS = set()
 
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
@@ -103,6 +110,88 @@ def _normalize_facebook_group_url(group_url: str) -> str:
     return f"https://www.facebook.com/groups/{parts[1]}/"
 
 
+def _analyze_facebook_job(job_id: int):
+    """Match imported Facebook posts to active keywords and run the shared AI classifier."""
+    try:
+        posts = get_facebook_posts_for_job(job_id, pending_only=True)
+        keywords = [item for item in get_all_keywords(active_only=True) if item.get("keyword", "").strip()]
+        if not keywords:
+            return
+
+        try:
+            confidence_threshold = float(get_setting("confidence_threshold", "0.75"))
+        except ValueError:
+            confidence_threshold = 0.75
+
+        for post in posts:
+            content = str(post.get("content") or "")
+            content_folded = content.casefold()
+            matches = [item for item in keywords if item["keyword"].strip().casefold() in content_folded]
+            if not matches:
+                update_facebook_post_analysis(post["id"], "unmatched")
+                continue
+
+            # Prefer the most specific (longest) phrase when several keywords match.
+            keyword_item = max(matches, key=lambda item: len(item["keyword"].strip()))
+            keyword = keyword_item["keyword"].strip()
+            post_key = f"facebook:{post['source_id']}:{post['post_id']}"
+            if is_post_duplicate(post_key, post.get("post_url", ""), content):
+                update_facebook_post_analysis(post["id"], "duplicate", keyword)
+                continue
+
+            try:
+                ai_result = analyze_post_intent(content, keyword, keyword_item.get("business_description", ""))
+                is_qualified_lead = (
+                    ai_result.get("is_lead", False)
+                    and not ai_result.get("is_competitor", False)
+                    and float(ai_result.get("confidence_score", 0)) >= confidence_threshold
+                )
+                if is_qualified_lead:
+                    lead = {
+                        "post_id": post_key,
+                        "keyword": keyword,
+                        "author": post.get("author", ""),
+                        "content": content,
+                        "post_url": post.get("post_url", ""),
+                        "publish_time": post.get("publish_time", ""),
+                        "ai_reason": ai_result.get("ai_reason", ""),
+                        "confidence_score": ai_result.get("confidence_score", 1.0),
+                        "suggested_reply": ai_result.get("suggested_reply", ""),
+                        "intent_type": ai_result.get("intent_type", "其他"),
+                        "location": ai_result.get("location", ""),
+                        "urgency": ai_result.get("urgency", "low"),
+                        "is_competitor": ai_result.get("is_competitor", False),
+                        "contactability": ai_result.get("contactability", "low"),
+                    }
+                    if save_lead(lead):
+                        send_lead_notification(lead)
+                        update_facebook_post_analysis(post["id"], "lead", keyword)
+                    else:
+                        update_facebook_post_analysis(post["id"], "duplicate", keyword)
+                else:
+                    skipped = {
+                        "post_id": post_key,
+                        "keyword": keyword,
+                        "author": post.get("author", ""),
+                        "content": content,
+                        "post_url": post.get("post_url", ""),
+                        "ai_reason": ai_result.get("ai_reason", "AI 判定非實質需求"),
+                    }
+                    save_skipped(skipped)
+                    update_facebook_post_analysis(post["id"], "skipped", keyword)
+            except Exception as exc:
+                update_facebook_post_analysis(post["id"], "error", keyword, str(exc))
+    finally:
+        FACEBOOK_ANALYSIS_JOBS.discard(job_id)
+
+
+def _queue_facebook_analysis(job_id: int):
+    if job_id in FACEBOOK_ANALYSIS_JOBS:
+        return
+    FACEBOOK_ANALYSIS_JOBS.add(job_id)
+    asyncio.create_task(asyncio.to_thread(_analyze_facebook_job, job_id))
+
+
 def _sync_facebook_job(job: dict) -> dict:
     """Refresh local job state and persist completed runner output."""
     if not job.get("runner_job_id"):
@@ -127,6 +216,7 @@ def _sync_facebook_job(job: dict) -> dict:
         try:
             payload = get_runner_posts(job["runner_job_id"])
             save_facebook_posts(job["id"], job["source_id"], payload.get("posts", []))
+            _queue_facebook_analysis(job["id"])
         except FacebookRunnerError as exc:
             job["runner_error"] = str(exc)
     job.update(

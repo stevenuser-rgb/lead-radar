@@ -159,14 +159,29 @@ def init_db():
         content TEXT DEFAULT '',
         post_url TEXT DEFAULT '',
         publish_time TEXT DEFAULT '',
+        analysis_status TEXT DEFAULT 'pending',
+        matched_keyword TEXT DEFAULT '',
+        analysis_error TEXT DEFAULT '',
+        analyzed_at TEXT,
         created_at TEXT DEFAULT (datetime('now', 'localtime')),
         UNIQUE(job_id, post_id),
         FOREIGN KEY(source_id) REFERENCES facebook_sources(id),
         FOREIGN KEY(job_id) REFERENCES facebook_jobs(id)
     )
     """)
+    cursor.execute("PRAGMA table_info(facebook_posts)")
+    facebook_post_columns = [row[1] for row in cursor.fetchall()]
+    for column, definition in (
+        ("analysis_status", "TEXT DEFAULT 'pending'"),
+        ("matched_keyword", "TEXT DEFAULT ''"),
+        ("analysis_error", "TEXT DEFAULT ''"),
+        ("analyzed_at", "TEXT"),
+    ):
+        if column not in facebook_post_columns:
+            cursor.execute(f"ALTER TABLE facebook_posts ADD COLUMN {column} {definition}")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_facebook_jobs_source ON facebook_jobs(source_id, id DESC)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_facebook_posts_source ON facebook_posts(source_id, id DESC)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_facebook_posts_analysis ON facebook_posts(analysis_status, id DESC)")
     
     # 一次性加入拆分後的高意圖、地區與問題型關鍵字，不覆寫使用者既有資料。
     recommended_keywords = [
@@ -335,6 +350,34 @@ def get_facebook_posts(limit: int = 100) -> List[Dict[str, Any]]:
     ).fetchall()
     conn.close()
     return [dict(row) for row in rows]
+
+def get_facebook_posts_for_job(job_id: int, pending_only: bool = False) -> List[Dict[str, Any]]:
+    conn = get_db()
+    query = "SELECT * FROM facebook_posts WHERE job_id = ?"
+    params: List[Any] = [job_id]
+    if pending_only:
+        query += " AND analysis_status = 'pending'"
+    query += " ORDER BY id ASC"
+    rows = conn.execute(query, params).fetchall()
+    conn.close()
+    return [dict(row) for row in rows]
+
+def update_facebook_post_analysis(
+    post_row_id: int,
+    status: str,
+    matched_keyword: str = "",
+    error: str = "",
+):
+    conn = get_db()
+    conn.execute(
+        """UPDATE facebook_posts
+           SET analysis_status = ?, matched_keyword = ?, analysis_error = ?,
+               analyzed_at = datetime('now', 'localtime')
+           WHERE id = ?""",
+        (status, matched_keyword, error[:500], post_row_id),
+    )
+    conn.commit()
+    conn.close()
 
 def update_keyword(kw_id: int, keyword: str, business_description: str) -> bool:
     conn = get_db()

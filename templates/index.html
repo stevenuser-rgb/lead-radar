@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>商務需求雷達 | Lead Radar</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans min-h-screen">
+
+  <!-- 頂部導航欄 -->
+  <header class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      <div class="flex items-center space-x-3">
+        <div class="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center text-white text-xl shadow-md">
+          <i class="fa-solid fa-satellite-dish"></i>
+        </div>
+        <div>
+          <h1 class="text-lg font-bold text-slate-900 leading-tight">商務需求雷達｜Coffee 智造所 <span class="text-xs px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200 ml-1">Private Lead Radar</span></h1>
+          <p class="text-xs text-slate-500">AI 社群潛在客戶自動探測與意圖過濾系統｜Steven.user@gmail.com</p>
+        </div>
+      </div>
+      <div class="flex items-center space-x-3">
+        <div class="hidden lg:flex flex-col items-end text-xs text-slate-500">
+          <div class="flex items-center text-emerald-700 font-medium">
+            <span class="w-2 h-2 rounded-full bg-emerald-500 mr-1.5 animate-pulse"></span>
+            排程運作中 (每 {{ settings.scan_interval_minutes }} 分鐘)
+          </div>
+          <span class="text-[11px] text-slate-400">下次掃描：{{ settings.next_scan_time }}</span>
+        </div>
+        <button onclick="triggerScan()" id="scan-btn" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold rounded-lg shadow transition flex items-center space-x-2">
+          <i class="fa-solid fa-rotate"></i>
+          <span>即刻執行掃描</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- 主內容容器 -->
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+
+    <!-- 頂部統計指標卡片 -->
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
+        <div>
+          <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider">🎯 累計命中商機</div>
+          <div class="text-2xl font-bold text-indigo-600 mt-1">{{ stats.total_leads }} <span class="text-xs font-normal text-slate-400">筆潛在委託</span></div>
+        </div>
+        <div class="w-12 h-12 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center text-xl">
+          <i class="fa-solid fa-bullseye"></i>
+        </div>
+      </div>
+      <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
+        <div>
+          <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider">📡 啟用中關鍵字</div>
+          <div class="text-2xl font-bold text-slate-900 mt-1">{{ stats.active_keywords }} <span class="text-xs font-normal text-slate-400">組監控群組</span></div>
+        </div>
+        <div class="w-12 h-12 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center text-xl">
+          <i class="fa-solid fa-tags"></i>
+        </div>
+      </div>
+      <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
+        <div>
+          <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider">🚫 AI 過濾雜訊與廣告</div>
+          <div class="text-2xl font-bold text-slate-700 mt-1">{{ stats.total_skipped }} <span class="text-xs font-normal text-slate-400">則已排除</span></div>
+        </div>
+        <div class="w-12 h-12 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center text-xl">
+          <i class="fa-solid fa-filter"></i>
+        </div>
+      </div>
+    </div>
+
+    <!-- 標籤頁切換導航 -->
+    <div class="border-b border-slate-200">
+      <nav class="flex space-x-2 sm:space-x-8 overflow-x-auto" aria-label="Tabs">
+        <button onclick="switchTab('dashboard')" id="tab-btn-dashboard" class="tab-btn border-b-2 border-indigo-600 text-indigo-600 py-3 px-2 text-sm font-bold flex items-center space-x-2 whitespace-nowrap">
+          <i class="fa-solid fa-chart-line"></i>
+          <span>即時監控看板</span>
+        </button>
+        <button onclick="switchTab('leads')" id="tab-btn-leads" class="tab-btn border-b-2 border-transparent text-slate-500 hover:text-slate-700 py-3 px-2 text-sm font-medium flex items-center space-x-2 whitespace-nowrap">
+          <i class="fa-solid fa-bullseye"></i>
+          <span>命中需求庫 ({{ leads|length }})</span>
+        </button>
+        <button onclick="switchTab('skipped')" id="tab-btn-skipped" class="tab-btn border-b-2 border-transparent text-slate-500 hover:text-slate-700 py-3 px-2 text-sm font-medium flex items-center space-x-2 whitespace-nowrap">
+          <i class="fa-solid fa-shield-halved"></i>
+          <span>略過貼文與 AI 理由 ({{ skipped|length }})</span>
+        </button>
+        <button onclick="switchTab('keywords')" id="tab-btn-keywords" class="tab-btn border-b-2 border-transparent text-slate-500 hover:text-slate-700 py-3 px-2 text-sm font-medium flex items-center space-x-2 whitespace-nowrap">
+          <i class="fa-solid fa-sliders"></i>
+          <span>關鍵字與業務說明 (啟用 {{ stats.active_keywords }}/25)</span>
+        </button>
+        <button onclick="switchTab('settings')" id="tab-btn-settings" class="tab-btn border-b-2 border-transparent text-slate-500 hover:text-slate-700 py-3 px-2 text-sm font-medium flex items-center space-x-2 whitespace-nowrap">
+          <i class="fa-solid fa-clock-rotate-left"></i>
+          <span>排程時間與通知設定</span>
+        </button>
+      </nav>
+    </div>
+
+    <!-- 分頁 1: 即時監控看板 (Dashboard) -->
+    <div id="tab-dashboard" class="tab-content active space-y-4">
+      <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
+        <div class="flex items-center justify-between mb-4">
+          <div>
+            <h2 class="text-base font-bold text-slate-900">關鍵字即時掃描狀態 (Transparency View)</h2>
+            <p class="text-xs text-slate-500 mt-0.5">透明呈現每次輪詢的接收、命中與略過數</p>
+          </div>
+          <div class="text-xs text-slate-500 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200">
+            全域上次掃描時間：<span class="font-semibold text-slate-700">{{ settings.last_global_scan_time }}</span>
+          </div>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-sm text-slate-600">
+            <thead class="bg-slate-50 text-xs font-semibold text-slate-500 uppercase border-b border-slate-200">
+              <tr>
+                <th class="px-4 py-3">狀態</th>
+                <th class="px-4 py-3">監控關鍵字</th>
+                <th class="px-4 py-3">業務說明背景 (AI Context)</th>
+                <th class="px-4 py-3">上次掃描時間</th>
+                <th class="px-4 py-3 text-center">接收數</th>
+                <th class="px-4 py-3 text-center">🎯 命中</th>
+                <th class="px-4 py-3 text-center">🚫 略過</th>
+                <th class="px-4 py-3">資料來源狀態</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100">
+              {% for kw in keywords %}
+              <tr class="hover:bg-slate-50 transition">
+                <td class="px-4 py-3">
+                  {% if kw.is_active %}
+                  <span class="px-2 py-1 bg-emerald-100 text-emerald-800 text-xs font-medium rounded-full">監控中</span>
+                  {% else %}
+                  <span class="px-2 py-1 bg-slate-100 text-slate-600 text-xs font-medium rounded-full">已暫停</span>
+                  {% endif %}
+                </td>
+                <td class="px-4 py-3 font-semibold text-slate-900">#{{ kw.keyword }}</td>
+                <td class="px-4 py-3 text-xs text-slate-500 max-w-xs truncate">{{ kw.business_description or '未提供' }}</td>
+                <td class="px-4 py-3 text-xs text-slate-500">{{ kw.last_scan_time or '尚未執行' }}</td>
+                <td class="px-4 py-3 text-center font-mono text-xs">{{ kw.last_scanned_count }}</td>
+                <td class="px-4 py-3 text-center font-mono text-xs font-bold text-indigo-600">{{ kw.last_hit_count }}</td>
+                <td class="px-4 py-3 text-center font-mono text-xs text-slate-400">{{ kw.last_skipped_count }}</td>
+                <td class="px-4 py-3 text-xs">
+                  {% if kw.last_scan_status == 'error' %}
+                  <span class="text-rose-700" title="{{ kw.last_scan_error }}">❌ {{ kw.last_scan_error }}</span>
+                  {% elif kw.last_scan_status == 'ok' %}
+                  <span class="text-emerald-700">✅ API 正常</span>
+                  {% else %}
+                  <span class="text-slate-400">尚未驗證</span>
+                  {% endif %}
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- 分頁 2: 命中需求庫 (Hit Leads) -->
+    <div id="tab-leads" class="tab-content space-y-4">
+      <div class="flex items-center justify-between">
+        <h2 class="text-base font-bold text-slate-900">🎯 高價值潛在客戶需求庫 (保留30天)</h2>
+        <span class="text-xs text-slate-500">點擊卡片連結可直接前往社群對話搶先回覆</span>
+      </div>
+
+      {% if leads|length == 0 %}
+      <div class="bg-white rounded-xl border border-dashed border-slate-300 p-12 text-center text-slate-400">
+        <i class="fa-solid fa-radar text-4xl mb-3 text-slate-300"></i>
+        <p class="text-sm">目前尚無命中商機。點擊上方「即刻執行掃描」開始探測！</p>
+      </div>
+      {% else %}
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {% for lead in leads %}
+        <div class="bg-white rounded-xl border border-slate-200 p-5 shadow-sm space-y-3 hover:shadow-md transition">
+          <div class="flex items-center justify-between">
+            <span class="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">
+              #{{ lead.keyword }}
+            </span>
+            <span class="text-xs text-slate-400">{{ lead.publish_time }}</span>
+          </div>
+          <div class="text-xs font-medium text-slate-500">
+            <i class="fa-regular fa-user mr-1"></i> {{ lead.author }}
+          </div>
+          <p class="text-sm text-slate-800 font-normal leading-relaxed bg-slate-50 p-3 rounded-lg border border-slate-100">
+            {{ lead.content }}
+          </p>
+          <div class="bg-indigo-50/50 p-3 rounded-lg border border-indigo-100 text-xs space-y-1">
+            <div class="font-semibold text-indigo-900"><i class="fa-solid fa-brain mr-1 text-indigo-600"></i> AI 意圖分析：</div>
+            <div class="text-indigo-800">{{ lead.ai_reason }}</div>
+            <div class="flex flex-wrap gap-2 pt-1 text-[11px] text-slate-600">
+              <span>類型：{{ lead.intent_type or '其他' }}</span>
+              <span>地區：{{ lead.location or '未辨識' }}</span>
+              <span>急迫度：{{ lead.urgency or 'low' }}</span>
+              <span>可接觸性：{{ lead.contactability or 'low' }}</span>
+              <span>信心：{{ '%.0f'|format((lead.confidence_score or 0) * 100) }}%</span>
+            </div>
+            {% if lead.suggested_reply %}
+            <div class="text-slate-600 pt-1 border-t border-indigo-100">
+              <span class="font-semibold text-slate-700">💡 建議切入點：</span>{{ lead.suggested_reply }}
+            </div>
+            {% endif %}
+          </div>
+          <div class="pt-2 flex items-center justify-between border-t border-slate-100">
+            <div class="flex items-center space-x-2">
+              <select onchange="updateLeadStatus({{ lead.id }}, this.value)" class="text-xs bg-slate-50 border border-slate-200 rounded px-2 py-1">
+                <option value="pending" {% if lead.status == 'pending' %}selected{% endif %}>🟡 待聯繫</option>
+                <option value="replied" {% if lead.status == 'replied' %}selected{% endif %}>🟢 已回覆</option>
+                <option value="ignored" {% if lead.status == 'ignored' %}selected{% endif %}>⚪ 略過</option>
+              </select>
+            </div>
+            <a href="{{ lead.post_url }}" target="_blank" class="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-lg shadow-sm transition">
+              <span>前往 Threads 回覆</span>
+              <i class="fa-solid fa-arrow-up-right-from-square"></i>
+            </a>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </div>
+
+    <!-- 分頁 3: 略過貼文與 AI 理由 (Skipped Posts) -->
+    <div id="tab-skipped" class="tab-content space-y-4">
+      <div class="flex items-center justify-between">
+        <h2 class="text-base font-bold text-slate-900">🚫 略過貼文與 AI 判定日誌 (Noise Filtering Log)</h2>
+        <span class="text-xs text-slate-500">檢視 AI 過濾理由，可藉此調整業務描述以優化準確度</span>
+      </div>
+
+      <div class="bg-white rounded-xl border border-slate-200 shadow-sm divide-y divide-slate-100">
+        {% for s in skipped %}
+        <div class="p-4 space-y-2 hover:bg-slate-50 transition">
+          <div class="flex items-center justify-between text-xs">
+            <span class="font-semibold text-slate-700">#{{ s.keyword }} ({{ s.author }})</span>
+            <span class="text-slate-400">{{ s.created_at }}</span>
+          </div>
+          <p class="text-xs text-slate-600 line-clamp-2">{{ s.content }}</p>
+          {% if s.post_url %}
+          <a href="{{ s.post_url }}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center space-x-1 text-xs text-indigo-600 hover:text-indigo-800 font-medium">
+            <span>開啟原 Threads 貼文</span>
+            <i class="fa-solid fa-arrow-up-right-from-square"></i>
+          </a>
+          {% endif %}
+          <div class="text-xs bg-rose-50 text-rose-700 px-3 py-1.5 rounded-md border border-rose-100 flex items-center space-x-1.5">
+            <i class="fa-solid fa-ban text-rose-500"></i>
+            <span><strong>略過理由：</strong>{{ s.ai_reason }}</span>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <!-- 分頁 4: 關鍵字與業務說明 (Keywords & Business Context) -->
+    <div id="tab-keywords" class="tab-content space-y-4">
+      <div class="flex items-center justify-between">
+        <h2 class="text-base font-bold text-slate-900">⚙️ 監控關鍵字管理 (建議最多啟用 25 組)</h2>
+      </div>
+
+      <!-- 新增關鍵字表單 -->
+      <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-3">
+        <h3 class="text-sm font-bold text-slate-800"><i class="fa-solid fa-plus mr-1 text-indigo-600"></i> 新增追蹤關鍵字</h3>
+        <form onsubmit="addKeyword(event)" class="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">關鍵字 (Keyword)</label>
+            <input type="text" id="new-kw" placeholder="例：特定工廠登記" required class="w-full text-sm px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none">
+          </div>
+          <div class="md:col-span-2">
+            <label class="block text-xs font-semibold text-slate-600 mb-1">服務與業務簡介 (供 AI 理解您的背景)</label>
+            <div class="flex space-x-2">
+              <input type="text" id="new-desc" placeholder="例：善水工商地產：專營桃園/新北特定工廠登記與用地變更審查。" required class="w-full text-sm px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none">
+              <button type="submit" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold rounded-lg shadow whitespace-nowrap">新增</button>
+            </div>
+          </div>
+        </form>
+      </div>
+
+      <!-- 關鍵字清單 -->
+      <div class="bg-white rounded-xl border border-slate-200 shadow-sm divide-y divide-slate-100">
+        {% for kw in keywords %}
+        <div class="p-4 flex items-center justify-between hover:bg-slate-50 transition">
+          <div class="space-y-1">
+            <div class="flex items-center space-x-2">
+              <span class="text-sm font-bold text-slate-900">#{{ kw.keyword }}</span>
+              {% if kw.is_active %}
+              <span class="px-2 py-0.5 bg-emerald-50 text-emerald-700 text-xs rounded border border-emerald-200">啟用中</span>
+              {% else %}
+              <span class="px-2 py-0.5 bg-slate-100 text-slate-500 text-xs rounded border border-slate-200">已暫停</span>
+              {% endif %}
+            </div>
+            <p class="text-xs text-slate-500">{{ kw.business_description }}</p>
+          </div>
+          <div class="flex items-center space-x-2">
+            <button onclick="toggleKeyword({{ kw.id }}, {{ 0 if kw.is_active else 1 }})" class="text-xs px-3 py-1.5 border border-slate-200 hover:bg-slate-100 rounded-lg text-slate-600 font-medium">
+              {{ '暫停' if kw.is_active else '啟用' }}
+            </button>
+            <button onclick="deleteKeyword({{ kw.id }})" class="text-xs px-3 py-1.5 text-rose-600 hover:bg-rose-50 border border-rose-200 rounded-lg font-medium">
+              刪除
+            </button>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <!-- 分頁 5: 排程時間與通知設定 (Settings) -->
+    <div id="tab-settings" class="tab-content space-y-4">
+      <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-6 max-w-3xl">
+        <div>
+          <h2 class="text-base font-bold text-slate-900">⏰ 排程掃描時間與系統通知設定</h2>
+          <p class="text-xs text-slate-500 mt-0.5">自訂掃描頻率、營運時段、每日彙總時間與 LINE 推播憑證</p>
+        </div>
+
+        <form onsubmit="saveSettings(event)" class="space-y-5">
+          
+          <!-- 區塊 1: 掃描排程時間設定 -->
+          <div class="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-4">
+            <h3 class="text-sm font-bold text-slate-800 flex items-center">
+              <i class="fa-solid fa-clock mr-2 text-indigo-600"></i> 掃描時間與頻率控制
+            </h3>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-xs font-semibold text-slate-700 mb-1">自動掃描頻率 (輪詢間隔)</label>
+                <select id="cfg-interval" class="w-full text-sm px-3 py-2 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none">
+                  <option value="5" {% if settings.scan_interval_minutes == '5' %}selected{% endif %}>⚡ 每 5 分鐘掃描一次 (高頻率)</option>
+                  <option value="10" {% if settings.scan_interval_minutes == '10' %}selected{% endif %}>⏱️ 每 10 分鐘掃描一次 (預設推薦)</option>
+                  <option value="15" {% if settings.scan_interval_minutes == '15' %}selected{% endif %}>🕒 每 15 分鐘掃描一次</option>
+                  <option value="30" {% if settings.scan_interval_minutes == '30' %}selected{% endif %}>⏳ 每 30 分鐘掃描一次</option>
+                  <option value="60" {% if settings.scan_interval_minutes == '60' %}selected{% endif %}>📅 每 60 分鐘掃描一次 (低頻率)</option>
+                </select>
+              </div>
+
+              <div>
+                <label class="block text-xs font-semibold text-slate-700 mb-1">每日彙總報告時間 (Daily Summary)</label>
+                <input type="time" id="cfg-daily-summary" value="{{ settings.daily_summary_time }}" class="w-full text-sm px-3 py-2 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none">
+                <p class="text-[11px] text-slate-400 mt-1">※ 預設於凌晨 03:00 彙總過去 24 小時商機日誌。</p>
+              </div>
+              <div>
+                <label class="block text-xs font-semibold text-slate-700 mb-1">Threads 採集日期範圍</label>
+                <div class="flex items-center gap-2">
+                  <input type="number" id="cfg-collection-days" value="{{ settings.collection_days }}" min="1" max="90" class="w-24 text-sm px-3 py-2 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none">
+                  <span class="text-xs text-slate-600">天內</span>
+                </div>
+                <p class="text-[11px] text-slate-400 mt-1">只採集最近指定天數的公開貼文（1–90 天）。</p>
+              </div>
+            </div>
+
+            <div class="pt-2 border-t border-slate-200">
+              <div class="flex items-center space-x-2 mb-3">
+                <input type="checkbox" id="cfg-scan-enabled" {% if settings.scan_enabled == '1' %}checked{% endif %} class="w-4 h-4 text-indigo-600 rounded">
+                <label for="cfg-scan-enabled" class="text-xs font-semibold text-slate-700">啟用掃描系統（關閉後停止自動與手動掃描）</label>
+              </div>
+              <div class="flex items-center space-x-2 mb-2">
+                <input type="checkbox" id="cfg-hours-limit" {% if settings.enable_hours_limit == '1' %}checked{% endif %} class="w-4 h-4 text-indigo-600 rounded">
+                <label for="cfg-hours-limit" class="text-xs font-semibold text-slate-700">限制特定時段才執行掃描（非指定時段暫停）</label>
+              </div>
+              <div class="flex items-center space-x-2 text-xs text-slate-600 pl-6">
+                <span>從每日</span>
+                <input type="number" id="cfg-start-hour" value="{{ settings.active_start_hour }}" min="0" max="23" class="w-16 px-2 py-1 bg-white border border-slate-300 rounded text-center">
+                <span>點，至</span>
+                <input type="number" id="cfg-end-hour" value="{{ settings.active_end_hour }}" min="0" max="23" class="w-16 px-2 py-1 bg-white border border-slate-300 rounded text-center">
+                <span>點結束（例：08:00 至 22:00 營業時段）</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 區塊 2: AI 引擎與通知憑證 -->
+          <div class="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-4">
+            <h3 class="text-sm font-bold text-slate-800 flex items-center">
+              <i class="fa-solid fa-key mr-2 text-indigo-600"></i> AI 模型與通知管道
+            </h3>
+
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 mb-1">Google Gemini API Key</label>
+              <input type="password" id="cfg-gemini-key" value="{{ settings.gemini_api_key }}" placeholder="AIzaSy..." class="w-full text-sm px-3 py-2 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none">
+              <p class="text-[11px] text-slate-400 mt-1">※ 若留空，系統將自動切換為內建語意啟發式規則備用。</p>
+            </div>
+
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 mb-1">Threads 資料來源</label>
+              <select id="cfg-threads-source" class="w-full text-sm px-3 py-2 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none">
+                <option value="official" {% if settings.threads_source == 'official' %}selected{% endif %}>Meta 官方 Threads API</option>
+                <option value="apify" {% if settings.threads_source == 'apify' %}selected{% endif %}>Apify Threads Scraper</option>
+              </select>
+            </div>
+
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 mb-1">Apify API Token</label>
+              <input type="password" id="cfg-apify-token" value="{{ settings.apify_api_token }}" placeholder="apify_api_..." class="w-full text-sm px-3 py-2 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none">
+              <p class="text-[11px] text-slate-400 mt-1">※ 僅在資料來源選擇 Apify 時使用，請勿貼到聊天。</p>
+            </div>
+
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 mb-1">Apify Actor ID</label>
+              <input type="text" id="cfg-apify-actor" value="{{ settings.apify_actor_id }}" placeholder="logiover~threads-scraper" class="w-full text-sm px-3 py-2 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none">
+            </div>
+
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 mb-1">Threads Access Token</label>
+              <input type="password" id="cfg-threads-token" value="{{ settings.threads_access_token }}" placeholder="需包含 threads_keyword_search 權限" class="w-full text-sm px-3 py-2 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none">
+              <p class="text-[11px] text-slate-400 mt-1">※ 用於 Meta 官方 Keyword Search API，建議使用長效 Token。</p>
+            </div>
+
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 mb-1">商機信心門檻</label>
+              <input type="number" id="cfg-confidence" value="{{ settings.confidence_threshold }}" min="0" max="1" step="0.05" class="w-full text-sm px-3 py-2 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none">
+              <p class="text-[11px] text-slate-400 mt-1">※ 建議 0.75；低於門檻或同業貼文會列入略過紀錄。</p>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-xs font-semibold text-slate-700 mb-1">LINE Bot Token (Messaging API)</label>
+                <input type="password" id="cfg-line-bot" value="{{ settings.line_bot_token }}" placeholder="Channel Access Token" class="w-full text-sm px-3 py-2 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none">
+              </div>
+              <div>
+                <label class="block text-xs font-semibold text-slate-700 mb-1">LINE User ID</label>
+                <input type="text" id="cfg-line-uid" value="{{ settings.line_user_id }}" placeholder="U1234567890abcdef..." class="w-full text-sm px-3 py-2 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none">
+              </div>
+            </div>
+          </div>
+
+          <div class="pt-2 flex flex-wrap items-center justify-between gap-2">
+            <div class="flex flex-wrap gap-2">
+            <button type="button" onclick="testService('/api/settings/test-gemini')" class="px-4 py-2 border border-violet-200 text-violet-700 hover:bg-violet-50 text-xs font-semibold rounded-lg transition">
+              <i class="fa-solid fa-brain mr-1"></i> 測試 Gemini
+            </button>
+            <button type="button" onclick="testThreads()" class="px-4 py-2 border border-emerald-200 text-emerald-700 hover:bg-emerald-50 text-xs font-semibold rounded-lg transition">
+              <i class="fa-solid fa-magnifying-glass mr-1"></i> 測試 Threads API
+            </button>
+            <button type="button" onclick="testService('/api/settings/test-apify')" class="px-4 py-2 border border-orange-200 text-orange-700 hover:bg-orange-50 text-xs font-semibold rounded-lg transition">
+              <i class="fa-solid fa-cloud mr-1"></i> 測試 Apify
+            </button>
+            <button type="button" onclick="testNotification()" class="px-4 py-2 border border-indigo-200 text-indigo-700 hover:bg-indigo-50 text-xs font-semibold rounded-lg transition">
+              <i class="fa-solid fa-paper-plane mr-1"></i> 發送測試 LINE 訊息
+            </button>
+            </div>
+            <button type="submit" class="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold rounded-lg shadow transition">
+              儲存所有設定 (即刻生效)
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+  </main>
+
+  <footer class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-6 text-center text-xs text-slate-400">
+    coffee 智造所｜steven.user@gmail.com
+  </footer>
+
+  <script>
+    function switchTab(tabId) {
+      document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+      document.querySelectorAll('.tab-btn').forEach(el => {
+        el.classList.remove('border-indigo-600', 'text-indigo-600', 'font-bold');
+        el.classList.add('border-transparent', 'text-slate-500', 'font-medium');
+      });
+      document.getElementById('tab-' + tabId).classList.add('active');
+      const activeBtn = document.getElementById('tab-btn-' + tabId);
+      activeBtn.classList.remove('border-transparent', 'text-slate-500', 'font-medium');
+      activeBtn.classList.add('border-indigo-600', 'text-indigo-600', 'font-bold');
+    }
+
+    async function triggerScan() {
+      const btn = document.getElementById('scan-btn');
+      const originalText = btn.innerHTML;
+      btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> <span>掃描中...</span>';
+      btn.disabled = true;
+      try {
+        const resp = await fetch('/api/scan', { method: 'POST' });
+        const res = await resp.json();
+        alert('✅ ' + res.message);
+        setTimeout(() => location.reload(), 1500);
+      } catch (err) {
+        alert('❌ 掃描發起失敗: ' + err);
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+      }
+    }
+
+    async function addKeyword(e) {
+      e.preventDefault();
+      const kw = document.getElementById('new-kw').value;
+      const desc = document.getElementById('new-desc').value;
+      const formData = new FormData();
+      formData.append('keyword', kw);
+      formData.append('business_description', desc);
+      const resp = await fetch('/api/keywords/add', { method: 'POST', body: formData });
+      if (resp.ok) {
+        location.reload();
+      } else {
+        alert('新增失敗，關鍵字可能已存在。');
+      }
+    }
+
+    async function toggleKeyword(id, isActive) {
+      const formData = new FormData();
+      formData.append('is_active', isActive);
+      await fetch(`/api/keywords/${id}/toggle`, { method: 'POST', body: formData });
+      location.reload();
+    }
+
+    async function deleteKeyword(id) {
+      if (confirm('確定要刪除此關鍵字監控？')) {
+        await fetch(`/api/keywords/${id}/delete`, { method: 'POST' });
+        location.reload();
+      }
+    }
+
+    async function updateLeadStatus(id, status) {
+      const formData = new FormData();
+      formData.append('status', status);
+      await fetch(`/api/leads/${id}/status`, { method: 'POST', body: formData });
+    }
+
+    async function saveSettings(e) {
+      e.preventDefault();
+      const formData = new FormData();
+      formData.append('gemini_api_key', document.getElementById('cfg-gemini-key').value);
+      formData.append('threads_access_token', document.getElementById('cfg-threads-token').value);
+      formData.append('threads_source', document.getElementById('cfg-threads-source').value);
+      formData.append('apify_api_token', document.getElementById('cfg-apify-token').value);
+      formData.append('apify_actor_id', document.getElementById('cfg-apify-actor').value);
+      formData.append('line_bot_token', document.getElementById('cfg-line-bot').value);
+      formData.append('line_user_id', document.getElementById('cfg-line-uid').value);
+      formData.append('confidence_threshold', document.getElementById('cfg-confidence').value);
+      formData.append('collection_days', document.getElementById('cfg-collection-days').value);
+      formData.append('scan_enabled', document.getElementById('cfg-scan-enabled').checked ? '1' : '0');
+      formData.append('scan_interval_minutes', document.getElementById('cfg-interval').value);
+      formData.append('enable_hours_limit', document.getElementById('cfg-hours-limit').checked ? '1' : '0');
+      formData.append('active_start_hour', document.getElementById('cfg-start-hour').value);
+      formData.append('active_end_hour', document.getElementById('cfg-end-hour').value);
+      formData.append('daily_summary_time', document.getElementById('cfg-daily-summary').value);
+      
+      const resp = await fetch('/api/settings/save', { method: 'POST', body: formData });
+      const res = await resp.json();
+      alert(res.message);
+      location.reload();
+    }
+
+    async function testNotification() {
+      const resp = await fetch('/api/settings/test-notify', { method: 'POST' });
+      const res = await resp.json();
+      alert(res.message);
+    }
+
+    async function testThreads() {
+      await testService('/api/settings/test-threads');
+    }
+
+    async function testService(url) {
+      const resp = await fetch(url, { method: 'POST' });
+      const res = await resp.json();
+      alert((resp.ok ? '✅ ' : '❌ ') + res.message);
+    }
+  </script>
+</body>
+</html>

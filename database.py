@@ -313,13 +313,13 @@ def save_facebook_posts(job_id: int, source_id: int, posts: List[Dict[str, Any]]
            (source_id, job_id, post_id, author, content, post_url, publish_time)
            VALUES (?, ?, ?, ?, ?, ?, ?)""",
         [
-            (source_id, job_id, str(post.get("postId") or post.get("post_id") or post.get("id") or ""),
-             post.get("author", "") or post.get("authorName", ""),
+            (source_id, job_id, str(post.get("postId") or post.get("post_id") or post.get("id") or post.get("url") or post.get("post_url") or ""),
+             post.get("author", "") or post.get("authorName", "") or post.get("author_name", ""),
              post.get("content", "") or post.get("text", ""),
              post.get("postUrl", "") or post.get("post_url", "") or post.get("url", ""),
-             post.get("publishTime", "") or post.get("publish_time", "") or post.get("createdAt", ""))
+             post.get("publishTime", "") or post.get("publish_time", "") or post.get("createdAt", "") or post.get("created_at", ""))
             for post in posts
-            if post.get("postId") or post.get("post_id") or post.get("id")
+            if post.get("postId") or post.get("post_id") or post.get("id") or post.get("url") or post.get("post_url")
         ],
     )
     conn.commit()
@@ -335,6 +335,20 @@ def get_facebook_posts(limit: int = 100) -> List[Dict[str, Any]]:
     ).fetchall()
     conn.close()
     return [dict(row) for row in rows]
+
+def update_keyword(kw_id: int, keyword: str, business_description: str) -> bool:
+    conn = get_db()
+    try:
+        conn.execute(
+            "UPDATE keywords SET keyword = ?, business_description = ? WHERE id = ?",
+            (keyword.strip(), business_description.strip(), kw_id),
+        )
+        conn.commit()
+        return True
+    except sqlite3.IntegrityError:
+        return False
+    finally:
+        conn.close()
 
 def get_all_keywords(active_only: bool = False) -> List[Dict[str, Any]]:
     conn = get_db()

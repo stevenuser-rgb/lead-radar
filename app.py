@@ -29,6 +29,7 @@ from database import (
     update_facebook_job,
     save_facebook_posts,
     get_facebook_posts,
+    update_keyword,
 )
 from scheduler import background_scheduler_loop, run_scan_cycle, get_next_scan_time_str
 from notifier import send_lead_notification
@@ -254,6 +255,18 @@ async def api_add_keyword(keyword: str = Form(...), business_description: str = 
 @app.post("/api/keywords/{kw_id}/toggle")
 async def api_toggle_keyword(kw_id: int, is_active: int = Form(...)):
     toggle_keyword(kw_id, is_active)
+    return {"status": "ok"}
+
+@app.post("/api/keywords/{kw_id}/update")
+async def api_update_keyword(
+    kw_id: int,
+    keyword: str = Form(...),
+    business_description: str = Form(...),
+):
+    if not keyword.strip():
+        return JSONResponse(status_code=400, content={"status": "error", "message": "關鍵字不可為空白"})
+    if not update_keyword(kw_id, keyword, business_description):
+        return JSONResponse(status_code=409, content={"status": "error", "message": "關鍵字已存在，請換一個名稱"})
     return {"status": "ok"}
 
 @app.post("/api/keywords/{kw_id}/delete")

@@ -536,10 +536,12 @@ def update_facebook_post_analysis(
 def update_keyword(kw_id: int, keyword: str, business_description: str) -> bool:
     conn = get_db()
     try:
-        conn.execute(
+        cursor = conn.execute(
             "UPDATE keywords SET keyword = ?, business_description = ? WHERE id = ?",
             (keyword.strip(), business_description.strip(), kw_id),
         )
+        if cursor.rowcount == 0:
+            return False
         conn.commit()
         return True
     except sqlite3.IntegrityError:

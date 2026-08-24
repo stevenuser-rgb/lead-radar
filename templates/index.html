@@ -297,7 +297,7 @@
             <p class="text-xs text-slate-500">{{ kw.business_description }}</p>
           </div>
           <div class="flex items-center space-x-2">
-            <button onclick="editKeyword({{ kw.id }}, {{ kw.keyword|tojson }}, {{ (kw.business_description or '')|tojson }})" class="text-xs px-3 py-1.5 border border-indigo-200 hover:bg-indigo-50 rounded-lg text-indigo-700 font-medium">
+            <button data-keyword-id="{{ kw.id }}" data-keyword="{{ kw.keyword|e }}" data-description="{{ (kw.business_description or '')|e }}" onclick="editKeyword(this)" class="text-xs px-3 py-1.5 border border-indigo-200 hover:bg-indigo-50 rounded-lg text-indigo-700 font-medium">
               編輯
             </button>
             <button onclick="toggleKeyword({{ kw.id }}, {{ 0 if kw.is_active else 1 }})" class="text-xs px-3 py-1.5 border border-slate-200 hover:bg-slate-100 rounded-lg text-slate-600 font-medium">
@@ -546,10 +546,11 @@
       location.reload();
     }
 
-    async function editKeyword(id, currentKeyword, currentDescription) {
-      const keyword = prompt('修改關鍵字', currentKeyword);
+    async function editKeyword(button) {
+      const id = button.dataset.keywordId;
+      const keyword = prompt('修改關鍵字', button.dataset.keyword || '');
       if (keyword === null) return;
-      const description = prompt('修改服務與業務簡介', currentDescription);
+      const description = prompt('修改服務與業務簡介', button.dataset.description || '');
       if (description === null) return;
       const formData = new FormData();
       formData.append('keyword', keyword.trim());

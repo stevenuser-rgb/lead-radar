@@ -34,8 +34,12 @@ services:
       TZ: Asia/Taipei
       RUNNER_PORT: 9090
       OUTPUT_ROOT: /app/output
+      MONITOR_OUTPUT_ROOT: /app/monitor-output
+      STATE_ROOT: /app/state
     volumes:
       - ./data/facebook-output:/app/output
+      - ./data/facebook-monitor-output:/app/monitor-output
+      - ./data/facebook-state:/app/state
       - ./data/facebook-cookies:/app/cookies:ro
     expose:
       - "9090"

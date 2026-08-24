@@ -23,6 +23,7 @@ from database import (
     get_facebook_sources,
     create_facebook_source,
     toggle_facebook_source,
+    toggle_facebook_source_monitor,
     get_facebook_source,
     create_facebook_job,
     get_facebook_job,
@@ -68,6 +69,7 @@ app = FastAPI(title="私有需求雷達 (Lead Radar)", lifespan=lifespan)
 templates = Jinja2Templates(directory="templates")
 FACEBOOK_ANALYSIS_JOBS = set()
 FACEBOOK_MAX_POSTS = 500
+FACEBOOK_DEEP_NO_NEW_POST_CYCLES = 10
 FACEBOOK_MIN_JOB_INTERVAL_MINUTES = max(1, int(os.getenv("FACEBOOK_MIN_JOB_INTERVAL_MINUTES", "30")))
 FACEBOOK_KEYWORD_TERMS = (
     "特定目的事業用地", "特定工廠登記", "農地工廠合法化", "工廠合法化", "丁種建築用地",
@@ -95,6 +97,8 @@ async def index(request: Request):
         "facebook_scan_enabled": get_setting("facebook_scan_enabled", "1"),
         "facebook_auto_scan_enabled": get_setting("facebook_auto_scan_enabled", "0"),
         "facebook_scan_interval_minutes": get_setting("facebook_scan_interval_minutes", "60"),
+        "facebook_monitor_enabled": get_setting("facebook_monitor_enabled", "0"),
+        "facebook_monitor_interval_minutes": get_setting("facebook_monitor_interval_minutes", "60"),
         "facebook_retention_days": get_setting("facebook_retention_days", "90"),
         "scan_interval_minutes": get_setting("scan_interval_minutes", "10"),
         "enable_hours_limit": get_setting("enable_hours_limit", "0"),
@@ -302,6 +306,8 @@ async def facebook_page(request: Request):
             "facebook_scan_enabled": get_setting("facebook_scan_enabled", "1") == "1",
             "facebook_auto_scan_enabled": get_setting("facebook_auto_scan_enabled", "0") == "1",
             "facebook_scan_interval_minutes": get_setting("facebook_scan_interval_minutes", "60"),
+            "facebook_monitor_enabled": get_setting("facebook_monitor_enabled", "0") == "1",
+            "facebook_monitor_interval_minutes": get_setting("facebook_monitor_interval_minutes", "60"),
             "runner_url": os.getenv("FACEBOOK_RUNNER_URL", "http://facebook-runner:9090"),
             "runner_available": runner_health() is not None,
         },
@@ -342,8 +348,18 @@ async def api_toggle_facebook_source(source_id: int, is_active: int = Form(...))
     return {"status": "ok"}
 
 
+@app.post("/api/facebook/sources/{source_id}/monitor")
+async def api_toggle_facebook_source_monitor(source_id: int, enabled: int = Form(...)):
+    if not get_facebook_source(source_id):
+        return JSONResponse(status_code=404, content={"status": "error", "message": "來源不存在"})
+    if get_setting("facebook_monitor_enabled", "0") != "1":
+        return JSONResponse(status_code=403, content={"status": "error", "message": "請先在系統設定啟用 Facebook 持續監控架構"})
+    toggle_facebook_source_monitor(source_id, enabled)
+    return {"status": "ok"}
+
+
 @app.post("/api/facebook/jobs")
-async def api_create_facebook_job(source_id: int = Form(...)):
+async def api_create_facebook_job(source_id: int = Form(...), scan_mode: str = Form("normal")):
     if get_setting("facebook_scan_enabled", "1") != "1":
         return JSONResponse(status_code=403, content={"status": "error", "message": "Facebook 掃描系統目前已關閉，請先到系統設定開啟"})
     source = get_facebook_source(source_id)
@@ -351,6 +367,13 @@ async def api_create_facebook_job(source_id: int = Form(...)):
         return JSONResponse(status_code=404, content={"status": "error", "message": "來源不存在"})
     if not source["is_active"]:
         return JSONResponse(status_code=400, content={"status": "error", "message": "請先啟用這個社團來源"})
+    if scan_mode not in {"normal", "deep", "monitor"}:
+        return JSONResponse(status_code=400, content={"status": "error", "message": "抓取模式不正確"})
+    if scan_mode == "monitor":
+        if get_setting("facebook_monitor_enabled", "0") != "1":
+            return JSONResponse(status_code=403, content={"status": "error", "message": "請先在系統設定啟用 Facebook 持續監控架構"})
+        if not source.get("monitor_enabled"):
+            return JSONResponse(status_code=400, content={"status": "error", "message": "請先對這個社團開啟監控"})
     recent_jobs = [job for job in get_facebook_jobs(limit=100) if job.get("source_id") == source_id]
     if any(job.get("status") in {"queued", "running"} for job in recent_jobs):
         return JSONResponse(status_code=409, content={"status": "error", "message": "這個社團已有抓取任務執行中，請等待完成"})
@@ -364,14 +387,22 @@ async def api_create_facebook_job(source_id: int = Form(...)):
                 return JSONResponse(status_code=429, content={"status": "error", "message": f"為降低帳號風險，請約 {wait_minutes} 分鐘後再抓取"})
         except (KeyError, TypeError, ValueError):
             pass
-    source["max_posts"] = min(FACEBOOK_MAX_POSTS, int(source.get("max_posts") or 100))
-    job_id = create_facebook_job(source)
+    source = dict(source)
+    source["max_posts"] = (
+        FACEBOOK_MAX_POSTS if scan_mode == "deep"
+        else min(50, int(source.get("max_posts") or 100)) if scan_mode == "monitor"
+        else min(FACEBOOK_MAX_POSTS, int(source.get("max_posts") or 100))
+    )
+    job_id = create_facebook_job(source, scan_mode=scan_mode)
     try:
         remote = submit_facebook_job(
             source["group_url"],
             int(source["max_posts"]),
             bool(source["no_proxy"]),
             source.get("cookies_file", ""),
+            FACEBOOK_DEEP_NO_NEW_POST_CYCLES if scan_mode == "deep" else 3 if scan_mode == "monitor" else 4,
+            monitor=scan_mode == "monitor",
+            source_key=f"source-{source_id}" if scan_mode == "monitor" else "",
         )
         update_facebook_job(job_id, runner_job_id=remote.get("id"), status=remote.get("status", "running"), started_at=remote.get("startedAt"))
         return {"status": "ok", "job_id": job_id, "runner_job_id": remote.get("id")}
@@ -473,6 +504,8 @@ async def api_save_settings(
     facebook_scan_enabled: str = Form("1"),
     facebook_auto_scan_enabled: str = Form("0"),
     facebook_scan_interval_minutes: str = Form("60"),
+    facebook_monitor_enabled: str = Form("0"),
+    facebook_monitor_interval_minutes: str = Form("60"),
     facebook_retention_days: str = Form("90"),
     scan_interval_minutes: str = Form("10"),
     enable_hours_limit: str = Form("0"),
@@ -500,11 +533,17 @@ async def api_save_settings(
     set_setting("scan_enabled", "1" if scan_enabled == "1" else "0")
     set_setting("facebook_scan_enabled", "1" if facebook_scan_enabled == "1" else "0")
     set_setting("facebook_auto_scan_enabled", "1" if facebook_auto_scan_enabled == "1" else "0")
+    set_setting("facebook_monitor_enabled", "1" if facebook_monitor_enabled == "1" else "0")
     try:
         facebook_interval = max(30, int(facebook_scan_interval_minutes))
     except ValueError:
         facebook_interval = 60
     set_setting("facebook_scan_interval_minutes", str(facebook_interval))
+    try:
+        facebook_monitor_interval = max(30, int(facebook_monitor_interval_minutes))
+    except ValueError:
+        facebook_monitor_interval = 60
+    set_setting("facebook_monitor_interval_minutes", str(facebook_monitor_interval))
     try:
         facebook_retention = min(365, max(30, int(facebook_retention_days)))
     except ValueError:

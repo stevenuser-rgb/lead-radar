@@ -364,6 +364,10 @@
                 <input type="checkbox" id="cfg-facebook-scan-enabled" {% if settings.facebook_scan_enabled == '1' %}checked{% endif %} class="w-4 h-4 text-blue-600 rounded">
                 <label for="cfg-facebook-scan-enabled" class="text-xs font-semibold text-slate-700">啟用 Facebook 掃描系統（關閉後停止 Facebook 自動與手動掃描）</label>
               </div>
+              <div class="flex items-center space-x-2 mb-3">
+                <input type="checkbox" id="cfg-facebook-monitor-enabled" {% if settings.facebook_monitor_enabled == '1' %}checked{% endif %} class="w-4 h-4 text-blue-600 rounded">
+                <label for="cfg-facebook-monitor-enabled" class="text-xs font-semibold text-slate-700">啟用 Facebook 持續監控架構（預設關閉；來源需個別開啟）</label>
+              </div>
               <div class="flex flex-wrap items-center gap-3 mb-3 pl-6">
                 <label class="flex items-center gap-2 text-xs font-semibold text-slate-700"><input type="checkbox" id="cfg-facebook-auto-scan-enabled" {% if settings.facebook_auto_scan_enabled == '1' %}checked{% endif %} class="w-4 h-4 text-blue-600 rounded">啟用 Facebook 自動排程</label>
                 <label class="text-xs text-slate-600">頻率
@@ -376,11 +380,22 @@
                     <option value="1440" {% if settings.facebook_scan_interval_minutes == '1440' %}selected{% endif %}>每天一次</option>
                   </select>
                 </label>
+                <label class="text-xs text-slate-600">監控頻率
+                  <select id="cfg-facebook-monitor-interval" class="ml-1 px-2 py-1 bg-white border border-slate-300 rounded">
+                    <option value="30" {% if settings.facebook_monitor_interval_minutes == '30' %}selected{% endif %}>每 30 分鐘</option>
+                    <option value="60" {% if settings.facebook_monitor_interval_minutes == '60' %}selected{% endif %}>每 60 分鐘</option>
+                    <option value="120" {% if settings.facebook_monitor_interval_minutes == '120' %}selected{% endif %}>每 2 小時</option>
+                    <option value="360" {% if settings.facebook_monitor_interval_minutes == '360' %}selected{% endif %}>每 6 小時</option>
+                    <option value="720" {% if settings.facebook_monitor_interval_minutes == '720' %}selected{% endif %}>每 12 小時</option>
+                    <option value="1440" {% if settings.facebook_monitor_interval_minutes == '1440' %}selected{% endif %}>每天一次</option>
+                  </select>
+                </label>
                 <label class="text-xs text-slate-600">原始貼文保留
                   <input type="number" id="cfg-facebook-retention" value="{{ settings.facebook_retention_days }}" min="30" max="365" class="ml-1 w-20 px-2 py-1 bg-white border border-slate-300 rounded text-center"> 天
                 </label>
               </div>
               <p class="text-[11px] text-slate-400 pl-6">超過保留天數的未命中、略過、重複與錯誤原始貼文會自動清理；命中需求不會清除。</p>
+              <p class="text-[11px] text-slate-400 pl-6">持續監控使用獨立的登入狀態目錄，採固定間隔輪詢最近貼文；不會自動啟用既有社團。</p>
               <div class="flex items-center space-x-2 mb-2">
                 <input type="checkbox" id="cfg-hours-limit" {% if settings.enable_hours_limit == '1' %}checked{% endif %} class="w-4 h-4 text-indigo-600 rounded">
                 <label for="cfg-hours-limit" class="text-xs font-semibold text-slate-700">限制特定時段才執行掃描（非指定時段暫停）</label>
@@ -577,6 +592,8 @@
       formData.append('facebook_scan_enabled', document.getElementById('cfg-facebook-scan-enabled').checked ? '1' : '0');
       formData.append('facebook_auto_scan_enabled', document.getElementById('cfg-facebook-auto-scan-enabled').checked ? '1' : '0');
       formData.append('facebook_scan_interval_minutes', document.getElementById('cfg-facebook-interval').value);
+      formData.append('facebook_monitor_enabled', document.getElementById('cfg-facebook-monitor-enabled').checked ? '1' : '0');
+      formData.append('facebook_monitor_interval_minutes', document.getElementById('cfg-facebook-monitor-interval').value);
       formData.append('facebook_retention_days', document.getElementById('cfg-facebook-retention').value);
       formData.append('scan_interval_minutes', document.getElementById('cfg-interval').value);
       formData.append('enable_hours_limit', document.getElementById('cfg-hours-limit').checked ? '1' : '0');

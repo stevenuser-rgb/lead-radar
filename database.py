@@ -125,6 +125,7 @@ def init_db():
         max_posts INTEGER DEFAULT 100,
         no_proxy INTEGER DEFAULT 1,
         cookies_file TEXT DEFAULT '',
+        monitor_enabled INTEGER DEFAULT 0,
         last_job_id INTEGER,
         last_job_status TEXT DEFAULT 'pending',
         last_job_error TEXT DEFAULT '',
@@ -132,6 +133,10 @@ def init_db():
         updated_at TEXT DEFAULT (datetime('now', 'localtime'))
     )
     """)
+    cursor.execute("PRAGMA table_info(facebook_sources)")
+    facebook_source_columns = [row[1] for row in cursor.fetchall()]
+    if "monitor_enabled" not in facebook_source_columns:
+        cursor.execute("ALTER TABLE facebook_sources ADD COLUMN monitor_enabled INTEGER DEFAULT 0")
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS facebook_jobs (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -140,6 +145,7 @@ def init_db():
         status TEXT DEFAULT 'queued',
         group_url TEXT NOT NULL,
         max_posts INTEGER DEFAULT 100,
+        scan_mode TEXT DEFAULT 'normal',
         created_at TEXT DEFAULT (datetime('now', 'localtime')),
         started_at TEXT,
         finished_at TEXT,
@@ -149,6 +155,10 @@ def init_db():
         FOREIGN KEY(source_id) REFERENCES facebook_sources(id)
     )
     """)
+    cursor.execute("PRAGMA table_info(facebook_jobs)")
+    facebook_job_columns = [row[1] for row in cursor.fetchall()]
+    if "scan_mode" not in facebook_job_columns:
+        cursor.execute("ALTER TABLE facebook_jobs ADD COLUMN scan_mode TEXT DEFAULT 'normal'")
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS facebook_posts (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -262,19 +272,29 @@ def toggle_facebook_source(source_id: int, is_active: int):
     conn.commit()
     conn.close()
 
+def toggle_facebook_source_monitor(source_id: int, enabled: int):
+    conn = get_db()
+    conn.execute(
+        "UPDATE facebook_sources SET monitor_enabled = ?, updated_at = datetime('now', 'localtime') WHERE id = ?",
+        (1 if enabled else 0, source_id),
+    )
+    conn.commit()
+    conn.close()
+
 def get_facebook_source(source_id: int) -> Optional[Dict[str, Any]]:
     conn = get_db()
     row = conn.execute("SELECT * FROM facebook_sources WHERE id = ?", (source_id,)).fetchone()
     conn.close()
     return dict(row) if row else None
 
-def create_facebook_job(source: Dict[str, Any]) -> int:
+def create_facebook_job(source: Dict[str, Any], scan_mode: str = "normal") -> int:
+    scan_mode = scan_mode if scan_mode in {"normal", "deep", "monitor"} else "normal"
     conn = get_db()
     cursor = conn.cursor()
     cursor.execute(
-        """INSERT INTO facebook_jobs (source_id, group_url, max_posts, status)
-           VALUES (?, ?, ?, 'queued')""",
-        (source["id"], source["group_url"], source["max_posts"]),
+        """INSERT INTO facebook_jobs (source_id, group_url, max_posts, scan_mode, status)
+           VALUES (?, ?, ?, ?, 'queued')""",
+        (source["id"], source["group_url"], source["max_posts"], scan_mode),
     )
     job_id = cursor.lastrowid
     cursor.execute(

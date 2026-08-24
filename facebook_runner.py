@@ -25,12 +25,23 @@ def _request(method: str, path: str, **kwargs: Any) -> Dict[str, Any]:
     return payload
 
 
-def submit_facebook_job(group_url: str, max_posts: int, no_proxy: bool, cookies_file: str = "") -> Dict[str, Any]:
+def submit_facebook_job(
+    group_url: str,
+    max_posts: int,
+    no_proxy: bool,
+    cookies_file: str = "",
+    no_new_post_cycles: int = 4,
+    monitor: bool = False,
+    source_key: str = "",
+) -> Dict[str, Any]:
     payload = {
         "groupUrl": group_url,
         "maxPosts": max_posts,
         "noProxy": no_proxy,
         "cookiesFile": cookies_file,
+        "noNewPostCycles": no_new_post_cycles,
+        "monitor": monitor,
+        "sourceKey": source_key,
     }
     return _request("POST", "/jobs", json=payload)
 

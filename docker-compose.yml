@@ -7,6 +7,7 @@ services:
     environment:
       TZ: Asia/Taipei
       DB_PATH: /data/radar.db
+      FACEBOOK_COOKIES_DIR: /data/facebook-cookies
       FACEBOOK_RUNNER_URL: http://facebook-runner:9090
       FACEBOOK_MIN_JOB_INTERVAL_MINUTES: 30
     ports:

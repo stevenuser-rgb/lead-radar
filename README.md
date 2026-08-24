@@ -23,6 +23,8 @@ Facebook 社團來源提供兩種手動任務：一般抓取依來源貼文上�
 
 Cupmen 的 `data/facebook-state` 與 `data/facebook-monitor-output` 僅供容器執行期使用，不要提交到 Git；Cookie 仍放在 `data/facebook-cookies`。
 
+Facebook 頁面支援直接匯入檔名為 `cookies.json` 的登入 Cookie；後台會驗證格式並以權限 `600` 寫入 `data/facebook-cookies/cookies.json`，Runner 以 `/app/cookies/cookies.json` 讀取。Cookie 不會寫入資料庫或日誌。
+
 ---
 
 ## 🚀 快速啟動指南

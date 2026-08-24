@@ -2,9 +2,10 @@ import asyncio
 import os
 import datetime
 import re
+from pathlib import Path
 from urllib.parse import urlparse
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Request, Form, BackgroundTasks
+from fastapi import FastAPI, Request, Form, BackgroundTasks, File, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 
@@ -55,6 +56,12 @@ from facebook_runner import (
     get_runner_posts,
     runner_health,
     submit_facebook_job,
+)
+from facebook_cookie_store import (
+    CONTAINER_COOKIE_PATH,
+    cookie_file_available,
+    save_cookie_upload,
+    runner_cookie_path,
 )
 
 @asynccontextmanager
@@ -312,6 +319,8 @@ async def facebook_page(request: Request):
             "deep_scan_active": bool(get_active_facebook_jobs("deep")),
             "runner_url": os.getenv("FACEBOOK_RUNNER_URL", "http://facebook-runner:9090"),
             "runner_available": runner_health() is not None,
+            "facebook_cookie_available": cookie_file_available(),
+            "facebook_cookie_path": CONTAINER_COOKIE_PATH,
         },
     )
 
@@ -321,6 +330,29 @@ async def api_get_facebook_post(post_id: int):
     if not post:
         return JSONResponse(status_code=404, content={"status": "error", "message": "貼文不存在"})
     return {"status": "ok", "post": post}
+
+
+@app.post("/api/facebook/cookies")
+async def api_upload_facebook_cookies(file: UploadFile = File(...)):
+    filename = Path(file.filename or "").name.lower()
+    if filename != "cookies.json":
+        await file.close()
+        return JSONResponse(status_code=400, content={"status": "error", "message": "請選擇檔名為 cookies.json 的檔案"})
+    try:
+        raw = await file.read(5 * 1024 * 1024 + 1)
+        cookie_count = save_cookie_upload(raw)
+    except ValueError as exc:
+        return JSONResponse(status_code=400, content={"status": "error", "message": str(exc)})
+    except OSError:
+        return JSONResponse(status_code=500, content={"status": "error", "message": "Cookie 檔案無法寫入指定目錄"})
+    finally:
+        await file.close()
+    return {
+        "status": "ok",
+        "message": "Cookie 已匯入",
+        "path": CONTAINER_COOKIE_PATH,
+        "cookie_count": cookie_count,
+    }
 
 
 @app.post("/api/facebook/sources")
@@ -402,11 +434,12 @@ async def api_create_facebook_job(source_id: int = Form(...), scan_mode: str = F
     )
     job_id = create_facebook_job(source, scan_mode=scan_mode)
     try:
+        cookies_file = runner_cookie_path(source.get("cookies_file", ""))
         remote = submit_facebook_job(
             source["group_url"],
             int(source["max_posts"]),
             bool(source["no_proxy"]),
-            source.get("cookies_file", ""),
+            cookies_file,
             FACEBOOK_DEEP_NO_NEW_POST_CYCLES if scan_mode == "deep" else 3 if scan_mode == "monitor" else 4,
             monitor=scan_mode == "monitor",
             source_key=f"source-{source_id}" if scan_mode == "monitor" else "",

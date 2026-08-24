@@ -55,6 +55,18 @@
           <div><h3 class="font-bold text-slate-900">社團來源管理</h3><p class="text-xs text-slate-500 mt-1">先加入來源，再啟動抓取任務</p></div>
           <i class="fa-solid fa-link text-blue-600"></i>
         </div>
+        <div class="mb-5 rounded-lg border border-violet-200 bg-violet-50 p-3">
+          <div class="flex items-center justify-between gap-2">
+            <div><h4 class="text-sm font-semibold text-violet-900">Facebook 登入 Cookie</h4><p class="text-[11px] text-violet-700 mt-1">匯入後供監控與抓取 Runner 使用，不會保存到資料庫。</p></div>
+            <i class="fa-solid fa-key text-violet-600"></i>
+          </div>
+          <form id="cookies-upload-form" class="mt-3 space-y-2" enctype="multipart/form-data">
+            <input id="cookies-file" name="file" type="file" accept=".json,application/json" required class="block w-full text-xs text-slate-600 file:mr-2 file:rounded-md file:border-0 file:bg-violet-600 file:px-2.5 file:py-1.5 file:text-xs file:font-semibold file:text-white hover:file:bg-violet-700">
+            <button class="w-full px-3 py-2 rounded-lg bg-violet-600 hover:bg-violet-700 text-white text-xs font-semibold"><i class="fa-solid fa-upload mr-1"></i>匯入 cookies.json</button>
+          </form>
+          <p class="text-[11px] mt-2 {% if facebook_cookie_available %}text-emerald-700{% else %}text-slate-600{% endif %}">{% if facebook_cookie_available %}目前已匯入 Cookie，Runner 路徑：{{ facebook_cookie_path }}{% else %}尚未匯入 Cookie；Runner 路徑：{{ facebook_cookie_path }}{% endif %}</p>
+          <p id="cookies-message" class="text-[11px] mt-1"></p>
+        </div>
         <form id="source-form" class="space-y-3">
           <label class="block"><span class="text-xs font-semibold text-slate-600">來源名稱</span><input name="name" placeholder="例如：桃園廠房社團" class="mt-1 w-full rounded-lg border-slate-300 text-sm"></label>
           <label class="block"><span class="text-xs font-semibold text-slate-600">社團網址</span><input name="group_url" required placeholder="https://www.facebook.com/groups/..." class="mt-1 w-full rounded-lg border-slate-300 text-sm"></label>
@@ -64,8 +76,8 @@
           </div>
           <details class="rounded-lg bg-slate-50 border border-slate-200 p-3">
             <summary class="cursor-pointer text-sm font-semibold text-slate-700">Cookie／進階設定</summary>
-            <label class="block mt-3"><span class="text-xs text-slate-600">容器內 cookies.json 路徑（可留白）</span><input name="cookies_file" placeholder="/app/cookies/cookies.json" class="mt-1 w-full rounded-lg border-slate-300 text-sm"></label>
-            <p class="text-[11px] text-slate-500 mt-2">只填路徑；Cookie 檔案請放在 Cupmen 的 data/facebook-cookies，不要提交到 Git。</p>
+            <label class="block mt-3"><span class="text-xs text-slate-600">容器內 cookies.json 路徑（可留白）</span><input name="cookies_file" value="{% if facebook_cookie_available %}{{ facebook_cookie_path }}{% endif %}" placeholder="/app/cookies/cookies.json" class="mt-1 w-full rounded-lg border-slate-300 text-sm"></label>
+            <p class="text-[11px] text-slate-500 mt-2">已匯入的 Cookie 會自動套用到未指定其他路徑的來源；Cookie 檔案不會提交到 Git。</p>
           </details>
           <p class="text-[11px] text-slate-500">一般抓取依來源上限執行；深度搜尋僅供手動使用，最多 500 篇並增加無新貼文檢查次數。同一社團完成後預設至少等待 30 分鐘。</p>
           <button class="w-full px-4 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold"><i class="fa-solid fa-plus mr-1"></i>加入社團來源</button>
@@ -125,6 +137,8 @@
   <script>
     async function parseResponse(response) { const data = await response.json(); if (!response.ok) throw new Error(data.message || '操作失敗'); return data; }
     function message(text, error = false) { const el = document.getElementById('source-message'); el.textContent = text; el.className = `text-xs mt-3 ${error ? 'text-red-600' : 'text-emerald-600'}`; }
+    function cookieMessage(text, error = false) { const el = document.getElementById('cookies-message'); el.textContent = text; el.className = `text-[11px] mt-1 ${error ? 'text-red-600' : 'text-emerald-700'}`; }
+    document.getElementById('cookies-upload-form').addEventListener('submit', async (event) => { event.preventDefault(); cookieMessage('匯入中…'); try { await parseResponse(await fetch('/api/facebook/cookies', { method: 'POST', body: new FormData(event.target) })); cookieMessage('Cookie 已匯入，重新整理後會套用到新任務。'); setTimeout(() => location.reload(), 500); } catch (error) { cookieMessage(error.message, true); } });
     document.getElementById('source-form').addEventListener('submit', async (event) => { event.preventDefault(); message('儲存中…'); try { const form = new FormData(event.target); if (!form.get('no_proxy')) form.set('no_proxy', '0'); await parseResponse(await fetch('/api/facebook/sources', { method: 'POST', body: form })); message('來源已加入'); setTimeout(() => location.reload(), 400); } catch (error) { message(error.message, true); } });
     async function toggleSource(id, active) { try { const form = new FormData(); form.set('is_active', active); await parseResponse(await fetch(`/api/facebook/sources/${id}/toggle`, { method: 'POST', body: form })); location.reload(); } catch (error) { alert(error.message); } }
     async function toggleMonitor(id, enabled) { try { const form = new FormData(); form.set('enabled', enabled); await parseResponse(await fetch(`/api/facebook/sources/${id}/monitor`, { method: 'POST', body: form })); location.reload(); } catch (error) { alert(error.message); } }

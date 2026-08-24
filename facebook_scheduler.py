@@ -13,6 +13,7 @@ from database import (
     update_facebook_job,
 )
 from facebook_runner import FacebookRunnerError, submit_facebook_job
+from facebook_cookie_store import runner_cookie_path
 
 
 def _minutes_since(value: str) -> float:
@@ -55,7 +56,7 @@ def _start_due_jobs(interval_minutes: int):
                 source["group_url"],
                 min(500, int(source.get("max_posts") or 100)),
                 bool(source.get("no_proxy")),
-                source.get("cookies_file", ""),
+                runner_cookie_path(source.get("cookies_file", "")),
             )
             update_facebook_job(
                 job_id,
@@ -94,7 +95,7 @@ def _start_due_monitor_jobs(interval_minutes: int):
                 source["group_url"],
                 monitor_source["max_posts"],
                 bool(source.get("no_proxy")),
-                source.get("cookies_file", ""),
+                runner_cookie_path(source.get("cookies_file", "")),
                 no_new_post_cycles=3,
                 monitor=True,
                 source_key=f"source-{source['id']}",

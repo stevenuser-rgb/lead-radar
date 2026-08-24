@@ -38,6 +38,17 @@
     {% if facebook_monitor_enabled %}<div class="px-4 py-3 rounded-lg border border-violet-200 bg-violet-50 text-violet-800 text-sm"><i class="fa-solid fa-binoculars mr-2"></i>持續監控架構已啟用：只有標記「監控中」的來源會依 {{ facebook_monitor_interval_minutes }} 分鐘輪詢，並沿用關鍵字與 AI 分析。</div>{% else %}<div class="px-4 py-3 rounded-lg border border-slate-200 bg-slate-100 text-slate-600 text-sm"><i class="fa-solid fa-toggle-off mr-2"></i>持續監控架構目前關閉；一般與深度抓取功能不受影響。</div>{% endif %}
     {% if deep_scan_active %}<div class="px-4 py-3 rounded-lg border border-indigo-200 bg-indigo-50 text-indigo-800 text-sm"><i class="fa-solid fa-layer-group mr-2"></i>深度掃描執行中：一般抓取、自動排程與監控輪詢暫停，完成後自動恢復。</div>{% endif %}
 
+    <section aria-label="Facebook 統計" class="space-y-4">
+      <div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+        <div class="bg-white rounded-xl border border-slate-200 p-4"><p class="text-xs text-slate-500">篩選結果</p><p class="mt-1 text-2xl font-bold text-slate-900">{{ post_summary.total }}</p></div>
+        <div class="bg-white rounded-xl border border-emerald-200 p-4"><p class="text-xs text-slate-500">命中需求</p><p class="mt-1 text-2xl font-bold text-emerald-700">{{ post_summary.leads }}</p></div>
+        <div class="bg-white rounded-xl border border-amber-200 p-4"><p class="text-xs text-slate-500">待分析</p><p class="mt-1 text-2xl font-bold text-amber-700">{{ post_summary.pending }}</p></div>
+        <div class="bg-white rounded-xl border border-slate-200 p-4"><p class="text-xs text-slate-500">未命中</p><p class="mt-1 text-2xl font-bold text-slate-600">{{ post_summary.unmatched }}</p></div>
+        <div class="bg-white rounded-xl border border-amber-200 p-4"><p class="text-xs text-slate-500">略過／重複</p><p class="mt-1 text-2xl font-bold text-amber-700">{{ post_summary.skipped + post_summary.duplicate }}</p></div>
+        <div class="bg-white rounded-xl border border-red-200 p-4"><p class="text-xs text-slate-500">分析錯誤</p><p class="mt-1 text-2xl font-bold text-red-700">{{ post_summary.errors }}</p></div>
+      </div>
+    </section>
+
     <section class="grid grid-cols-1 xl:grid-cols-3 gap-6">
       <div class="xl:col-span-1 bg-white rounded-xl border border-slate-200 shadow-sm p-5">
         <div class="flex items-center justify-between mb-4">
@@ -81,15 +92,6 @@
     </section>
 
     <section class="space-y-4">
-      <div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
-        <div class="bg-white rounded-xl border border-slate-200 p-4"><p class="text-xs text-slate-500">篩選結果</p><p class="mt-1 text-2xl font-bold text-slate-900">{{ post_summary.total }}</p></div>
-        <div class="bg-white rounded-xl border border-emerald-200 p-4"><p class="text-xs text-slate-500">命中需求</p><p class="mt-1 text-2xl font-bold text-emerald-700">{{ post_summary.leads }}</p></div>
-        <div class="bg-white rounded-xl border border-amber-200 p-4"><p class="text-xs text-slate-500">待分析</p><p class="mt-1 text-2xl font-bold text-amber-700">{{ post_summary.pending }}</p></div>
-        <div class="bg-white rounded-xl border border-slate-200 p-4"><p class="text-xs text-slate-500">未命中</p><p class="mt-1 text-2xl font-bold text-slate-600">{{ post_summary.unmatched }}</p></div>
-        <div class="bg-white rounded-xl border border-amber-200 p-4"><p class="text-xs text-slate-500">略過／重複</p><p class="mt-1 text-2xl font-bold text-amber-700">{{ post_summary.skipped + post_summary.duplicate }}</p></div>
-        <div class="bg-white rounded-xl border border-red-200 p-4"><p class="text-xs text-slate-500">分析錯誤</p><p class="mt-1 text-2xl font-bold text-red-700">{{ post_summary.errors }}</p></div>
-      </div>
-
       <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
         <div class="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-3 mb-4">
           <div><h3 class="font-bold text-slate-900">貼文結果</h3><p class="text-xs text-slate-500 mt-1">只載入目前篩選頁，完整內容請開啟詳細資料。</p></div>

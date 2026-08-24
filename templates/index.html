@@ -11,24 +11,24 @@
     .tab-content.active { display: block; }
   </style>
 </head>
-<body class="bg-slate-50 text-slate-800 font-sans min-h-screen">
+<body class="bg-slate-50 text-slate-800 font-sans min-h-screen overflow-x-hidden">
 
   <!-- 頂部導航欄 -->
   <header class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-      <div class="flex items-center space-x-3">
-        <div class="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center text-white text-xl shadow-md">
+    <div class="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 min-h-16 py-2 flex items-center justify-between gap-2">
+      <div class="flex items-center space-x-2 sm:space-x-3 min-w-0">
+        <div class="w-9 h-9 sm:w-10 sm:h-10 shrink-0 rounded-xl bg-indigo-600 flex items-center justify-center text-white text-xl shadow-md">
           <i class="fa-solid fa-satellite-dish"></i>
         </div>
-        <div>
-          <h1 class="text-lg font-bold text-slate-900 leading-tight">商務需求雷達｜Coffee 智造所 <span class="text-xs px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200 ml-1">Private Lead Radar</span></h1>
-          <p class="text-xs text-slate-500">AI 社群潛在客戶自動探測與意圖過濾系統｜Steven.user@gmail.com</p>
+        <div class="min-w-0">
+          <h1 class="text-sm sm:text-lg font-bold text-slate-900 leading-tight truncate">商務需求雷達｜Coffee 智造所 <span class="hidden sm:inline text-xs px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200 ml-1">Private Lead Radar</span></h1>
+          <p class="hidden sm:block text-xs text-slate-500 truncate">AI 社群潛在客戶自動探測與意圖過濾系統｜Steven.user@gmail.com</p>
         </div>
       </div>
-      <div class="flex items-center space-x-3">
-        <a href="/facebook" class="hidden sm:inline-flex px-3 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 text-sm font-semibold rounded-lg items-center space-x-2">
+      <div class="flex items-center space-x-1 sm:space-x-3 shrink-0">
+        <a href="/facebook" title="Facebook 社團" aria-label="Facebook 社團" class="inline-flex px-2 sm:px-3 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 text-sm font-semibold rounded-lg items-center space-x-2">
           <i class="fa-brands fa-facebook"></i>
-          <span>Facebook 社團</span>
+          <span class="hidden sm:inline">Facebook 社團</span>
         </a>
         <div class="hidden lg:flex flex-col items-end text-xs text-slate-500">
           <div class="flex items-center text-emerald-700 font-medium">
@@ -37,9 +37,9 @@
           </div>
           <span class="text-[11px] text-slate-400">下次掃描：{{ settings.next_scan_time }}</span>
         </div>
-        <button onclick="triggerScan()" id="scan-btn" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold rounded-lg shadow transition flex items-center space-x-2">
+        <button onclick="triggerScan()" id="scan-btn" title="即刻執行掃描" aria-label="即刻執行掃描" class="px-2 sm:px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold rounded-lg shadow transition flex items-center space-x-2">
           <i class="fa-solid fa-rotate"></i>
-          <span>即刻執行掃描</span>
+          <span class="hidden sm:inline">即刻執行掃描</span>
         </button>
       </div>
     </div>

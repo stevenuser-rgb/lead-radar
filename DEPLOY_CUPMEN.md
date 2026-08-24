@@ -15,7 +15,10 @@ git clone https://github.com/stevenuser-rgb/lead-radar.git . 2>/dev/null || git 
 cd ..
 git clone https://github.com/stevenuser-rgb/facebook-public-group-scraper-standalone.git 2>/dev/null || git -C facebook-public-group-scraper-standalone pull --ff-only origin main
 cd lead-radar
-mkdir -p data/facebook-output data/facebook-cookies
+mkdir -p data/facebook-output data/facebook-cookies data/facebook-monitor-output data/facebook-state
+# Playwright runner runs as pwuser (UID 1001); bind-mounted monitor paths must be writable by it.
+sudo chown -R 1001:1001 data/facebook-monitor-output data/facebook-state
+sudo chmod -R u+rwX,go-rwx data/facebook-monitor-output data/facebook-state
 docker compose up -d --build
 docker compose ps
 docker compose logs --tail=100 lead-radar
@@ -71,6 +74,8 @@ Facebook Cookie 檔案若要使用，請以主機檔案放在：
 ```
 
 後台欄位填入容器路徑 `/app/cookies/cookies.json`。Cookie 不應提交到 Git，也不要貼到聊天或日誌。
+
+持續監控使用 `data/facebook-monitor-output` 與 `data/facebook-state`。若出現 `EACCES: permission denied, mkdir /app/monitor-output`，重新執行上方的 `chown`／`chmod` 後再重啟 `facebook-runner`。
 
 ## 注意
 

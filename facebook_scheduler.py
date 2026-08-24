@@ -7,6 +7,8 @@ from database import (
     get_facebook_jobs,
     get_facebook_sources,
     get_setting,
+    clean_facebook_posts,
+    set_setting,
     update_facebook_job,
 )
 from facebook_runner import FacebookRunnerError, submit_facebook_job
@@ -74,6 +76,22 @@ def _sync_running_jobs():
     _queue_completed_facebook_analysis()
 
 
+def _maybe_cleanup_facebook_records():
+    """Run retention cleanup once per local day, without touching qualified leads."""
+    today = datetime.datetime.now().strftime("%Y-%m-%d")
+    if get_setting("facebook_last_retention_cleanup", "") == today:
+        return
+    try:
+        retention_days = min(365, max(30, int(get_setting("facebook_retention_days", "90"))))
+    except (TypeError, ValueError):
+        retention_days = 90
+    try:
+        clean_facebook_posts(retention_days)
+        set_setting("facebook_last_retention_cleanup", today)
+    except Exception as exc:
+        print(f"[Facebook retention] cleanup failed: {exc}")
+
+
 async def background_facebook_scheduler_loop():
     while True:
         try:
@@ -81,5 +99,6 @@ async def background_facebook_scheduler_loop():
         except (TypeError, ValueError):
             interval_minutes = 60
         _sync_running_jobs()
+        _maybe_cleanup_facebook_records()
         _start_due_jobs(interval_minutes)
         await asyncio.sleep(60)

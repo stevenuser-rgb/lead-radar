@@ -182,6 +182,7 @@ def init_db():
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_facebook_jobs_source ON facebook_jobs(source_id, id DESC)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_facebook_posts_source ON facebook_posts(source_id, id DESC)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_facebook_posts_analysis ON facebook_posts(analysis_status, id DESC)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_facebook_posts_source_post ON facebook_posts(source_id, post_id)")
     
     # 一次性加入拆分後的高意圖、地區與問題型關鍵字，不覆寫使用者既有資料。
     recommended_keywords = [
@@ -323,20 +324,33 @@ def update_facebook_job(job_id: int, **fields):
 
 def save_facebook_posts(job_id: int, source_id: int, posts: List[Dict[str, Any]]):
     conn = get_db()
-    conn.executemany(
-        """INSERT OR IGNORE INTO facebook_posts
-           (source_id, job_id, post_id, author, content, post_url, publish_time)
-           VALUES (?, ?, ?, ?, ?, ?, ?)""",
-        [
-            (source_id, job_id, str(post.get("postId") or post.get("post_id") or post.get("id") or post.get("url") or post.get("post_url") or ""),
-             post.get("author", "") or post.get("authorName", "") or post.get("author_name", ""),
-             post.get("content", "") or post.get("text", ""),
-             post.get("postUrl", "") or post.get("post_url", "") or post.get("url", ""),
-             post.get("publishTime", "") or post.get("publish_time", "") or post.get("createdAt", "") or post.get("created_at", ""))
-            for post in posts
-            if post.get("postId") or post.get("post_id") or post.get("id") or post.get("url") or post.get("post_url")
-        ],
-    )
+    for post in posts:
+        post_id = str(post.get("postId") or post.get("post_id") or post.get("id") or post.get("url") or post.get("post_url") or "")
+        if not post_id:
+            continue
+        author = post.get("author", "") or post.get("authorName", "") or post.get("author_name", "") or ""
+        content = post.get("content", "") or post.get("text", "") or ""
+        post_url = post.get("postUrl", "") or post.get("post_url", "") or post.get("url", "") or ""
+        publish_time = post.get("publishTime", "") or post.get("publish_time", "") or post.get("createdAt", "") or post.get("created_at", "") or ""
+        existing = conn.execute(
+            "SELECT id FROM facebook_posts WHERE source_id = ? AND post_id = ? ORDER BY id DESC LIMIT 1",
+            (source_id, post_id),
+        ).fetchone()
+        if existing:
+            # Keep the original analysis state while refreshing the latest scrape metadata.
+            conn.execute(
+                """UPDATE facebook_posts
+                   SET job_id = ?, author = ?, content = ?, post_url = ?, publish_time = ?
+                   WHERE id = ?""",
+                (job_id, author, content, post_url, publish_time, existing[0]),
+            )
+        else:
+            conn.execute(
+                """INSERT INTO facebook_posts
+                   (source_id, job_id, post_id, author, content, post_url, publish_time)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                (source_id, job_id, post_id, author, content, post_url, publish_time),
+            )
     conn.commit()
     conn.close()
 
@@ -350,6 +364,114 @@ def get_facebook_posts(limit: int = 100) -> List[Dict[str, Any]]:
     ).fetchall()
     conn.close()
     return [dict(row) for row in rows]
+
+def _facebook_post_filters(
+    source_id: Optional[int] = None,
+    analysis_status: str = "",
+    query: str = "",
+    days: int = 7,
+) -> tuple[str, List[Any]]:
+    clauses = ["1 = 1"]
+    params: List[Any] = []
+    if source_id:
+        clauses.append("p.source_id = ?")
+        params.append(source_id)
+    if analysis_status and analysis_status != "all":
+        clauses.append("COALESCE(p.analysis_status, 'pending') = ?")
+        params.append(analysis_status)
+    if query.strip():
+        search = f"%{query.strip()}%"
+        clauses.append("(p.content LIKE ? OR p.author LIKE ? OR s.name LIKE ?)")
+        params.extend([search, search, search])
+    if days > 0:
+        clauses.append("p.created_at >= datetime('now', 'localtime', ?)")
+        params.append(f"-{days} days")
+    return " AND ".join(clauses), params
+
+def get_facebook_post_page(
+    page: int = 1,
+    page_size: int = 50,
+    source_id: Optional[int] = None,
+    analysis_status: str = "",
+    query: str = "",
+    days: int = 7,
+) -> Dict[str, Any]:
+    page = max(1, page)
+    page_size = min(100, max(25, page_size))
+    where, params = _facebook_post_filters(source_id, analysis_status, query, days)
+    conn = get_db()
+    total = conn.execute(
+        f"SELECT COUNT(*) FROM facebook_posts p JOIN facebook_sources s ON s.id = p.source_id WHERE {where}",
+        params,
+    ).fetchone()[0]
+    pages = max(1, (total + page_size - 1) // page_size)
+    page = min(page, pages)
+    offset = (page - 1) * page_size
+    rows = conn.execute(
+        f"""SELECT p.*, s.name AS source_name
+            FROM facebook_posts p JOIN facebook_sources s ON s.id = p.source_id
+            WHERE {where}
+            ORDER BY p.id DESC LIMIT ? OFFSET ?""",
+        [*params, page_size, offset],
+    ).fetchall()
+    conn.close()
+    return {
+        "items": [dict(row) for row in rows],
+        "total": total,
+        "page": min(page, pages),
+        "page_size": page_size,
+        "pages": pages,
+    }
+
+def get_facebook_post_summary(
+    source_id: Optional[int] = None,
+    query: str = "",
+    days: int = 7,
+) -> Dict[str, int]:
+    where, params = _facebook_post_filters(source_id, "", query, days)
+    conn = get_db()
+    row = conn.execute(
+        f"""SELECT COUNT(*) AS total,
+                   SUM(CASE WHEN COALESCE(p.analysis_status, 'pending') = 'lead' THEN 1 ELSE 0 END) AS leads,
+                   SUM(CASE WHEN COALESCE(p.analysis_status, 'pending') = 'pending' THEN 1 ELSE 0 END) AS pending,
+                   SUM(CASE WHEN COALESCE(p.analysis_status, 'pending') = 'skipped' THEN 1 ELSE 0 END) AS skipped,
+                   SUM(CASE WHEN COALESCE(p.analysis_status, 'pending') = 'duplicate' THEN 1 ELSE 0 END) AS duplicate,
+                   SUM(CASE WHEN COALESCE(p.analysis_status, 'pending') = 'unmatched' THEN 1 ELSE 0 END) AS unmatched,
+                   SUM(CASE WHEN COALESCE(p.analysis_status, 'pending') = 'error' THEN 1 ELSE 0 END) AS errors
+            FROM facebook_posts p JOIN facebook_sources s ON s.id = p.source_id
+            WHERE {where}""",
+        params,
+    ).fetchone()
+    conn.close()
+    return {key: int(row[key] or 0) for key in ("total", "leads", "pending", "skipped", "duplicate", "unmatched", "errors")}
+
+def get_facebook_post(post_row_id: int) -> Optional[Dict[str, Any]]:
+    conn = get_db()
+    row = conn.execute(
+        """SELECT p.*, s.name AS source_name, j.status AS job_status, j.created_at AS job_created_at
+           FROM facebook_posts p
+           JOIN facebook_sources s ON s.id = p.source_id
+           JOIN facebook_jobs j ON j.id = p.job_id
+           WHERE p.id = ?""",
+        (post_row_id,),
+    ).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+def clean_facebook_posts(days: int = 90) -> int:
+    """Remove old non-lead raw posts while preserving qualified leads for long-term use."""
+    days = min(3650, max(30, int(days)))
+    cutoff = (datetime.datetime.now() - datetime.timedelta(days=days)).strftime("%Y-%m-%d %H:%M:%S")
+    conn = get_db()
+    cursor = conn.execute(
+        """DELETE FROM facebook_posts
+           WHERE created_at < ? AND COALESCE(analysis_status, 'pending') != 'lead'""",
+        (cutoff,),
+    )
+    deleted = cursor.rowcount
+    conn.commit()
+    conn.close()
+    return deleted
 
 def get_facebook_posts_for_job(job_id: int, pending_only: bool = False) -> List[Dict[str, Any]]:
     conn = get_db()

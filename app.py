@@ -29,7 +29,9 @@ from database import (
     get_facebook_jobs,
     update_facebook_job,
     save_facebook_posts,
-    get_facebook_posts,
+    get_facebook_post_page,
+    get_facebook_post_summary,
+    get_facebook_post,
     get_facebook_posts_for_job,
     update_facebook_post_analysis,
     update_keyword,
@@ -93,6 +95,7 @@ async def index(request: Request):
         "facebook_scan_enabled": get_setting("facebook_scan_enabled", "1"),
         "facebook_auto_scan_enabled": get_setting("facebook_auto_scan_enabled", "0"),
         "facebook_scan_interval_minutes": get_setting("facebook_scan_interval_minutes", "60"),
+        "facebook_retention_days": get_setting("facebook_retention_days", "90"),
         "scan_interval_minutes": get_setting("scan_interval_minutes", "10"),
         "enable_hours_limit": get_setting("enable_hours_limit", "0"),
         "active_start_hour": get_setting("active_start_hour", "8"),
@@ -264,13 +267,38 @@ def _sync_facebook_job(job: dict) -> dict:
 async def facebook_page(request: Request):
     jobs = [_sync_facebook_job(job) for job in get_facebook_jobs(limit=30)]
     _queue_completed_facebook_analysis()
+    query_params = request.query_params
+    try:
+        page = max(1, int(query_params.get("page", "1")))
+    except ValueError:
+        page = 1
+    try:
+        page_size = min(100, max(25, int(query_params.get("page_size", "50"))))
+    except ValueError:
+        page_size = 50
+    try:
+        source_id = int(query_params["source_id"]) if query_params.get("source_id") else None
+    except ValueError:
+        source_id = None
+    try:
+        days = min(365, max(0, int(query_params.get("days", "7"))))
+    except ValueError:
+        days = 7
+    status = query_params.get("status", "all")
+    if status not in {"all", "lead", "pending", "skipped", "unmatched", "duplicate", "error"}:
+        status = "all"
+    search = query_params.get("q", "")[:100]
+    post_page = get_facebook_post_page(page, page_size, source_id, status, search, days)
     return templates.TemplateResponse(
         request=request,
         name="facebook.html",
         context={
             "sources": get_facebook_sources(),
             "jobs": jobs,
-            "posts": get_facebook_posts(limit=100),
+            "posts": post_page["items"],
+            "post_pagination": post_page,
+            "post_summary": get_facebook_post_summary(source_id, search, days),
+            "post_filters": {"source_id": source_id, "status": status, "q": search, "days": days, "page_size": page_size},
             "facebook_scan_enabled": get_setting("facebook_scan_enabled", "1") == "1",
             "facebook_auto_scan_enabled": get_setting("facebook_auto_scan_enabled", "0") == "1",
             "facebook_scan_interval_minutes": get_setting("facebook_scan_interval_minutes", "60"),
@@ -278,6 +306,13 @@ async def facebook_page(request: Request):
             "runner_available": runner_health() is not None,
         },
     )
+
+@app.get("/api/facebook/posts/{post_id}")
+async def api_get_facebook_post(post_id: int):
+    post = get_facebook_post(post_id)
+    if not post:
+        return JSONResponse(status_code=404, content={"status": "error", "message": "貼文不存在"})
+    return {"status": "ok", "post": post}
 
 
 @app.post("/api/facebook/sources")
@@ -438,6 +473,7 @@ async def api_save_settings(
     facebook_scan_enabled: str = Form("1"),
     facebook_auto_scan_enabled: str = Form("0"),
     facebook_scan_interval_minutes: str = Form("60"),
+    facebook_retention_days: str = Form("90"),
     scan_interval_minutes: str = Form("10"),
     enable_hours_limit: str = Form("0"),
     active_start_hour: str = Form("8"),
@@ -469,6 +505,11 @@ async def api_save_settings(
     except ValueError:
         facebook_interval = 60
     set_setting("facebook_scan_interval_minutes", str(facebook_interval))
+    try:
+        facebook_retention = min(365, max(30, int(facebook_retention_days)))
+    except ValueError:
+        facebook_retention = 90
+    set_setting("facebook_retention_days", str(facebook_retention))
     set_setting("scan_interval_minutes", scan_interval_minutes.strip())
     set_setting("enable_hours_limit", enable_hours_limit.strip())
     set_setting("active_start_hour", active_start_hour.strip())

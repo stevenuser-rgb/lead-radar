@@ -62,6 +62,8 @@ docker compose up -d --build
 /home/davicool/lead-radar/data/radar.db
 ```
 
+Facebook 結果頁預設只查詢最近 7 天、每頁 50 筆，可依社團、分析狀態、文字與日期範圍篩選；系統設定中的「原始貼文保留天數」預設為 90 天。每日排程會清理超過期限的未命中、略過、重複與錯誤原始貼文，命中需求不會清除。同一社團的同一 Facebook 貼文跨任務會以 `source_id + post_id` 去重。
+
 Facebook Cookie 檔案若要使用，請以主機檔案放在：
 
 ```text

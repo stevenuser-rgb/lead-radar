@@ -11,7 +11,7 @@
 4. **關鍵字與業務背景自訂**：支援最多 10 組關鍵字與自訂專業業務簡介（AI System Prompt Context）。
 5. **多管道即時推播**：支援 LINE Notify / LINE Messaging API (Bot)，命中時第一時間通報。
 6. **10 分鐘自動背景排程**：內建非同步排程器，每 10 分鐘自動執行一輪全網檢索與意圖分析。
-7. **Facebook 社團模組**：獨立管理社團來源、抓取任務、runner 日誌與貼文結果；抓取程式以相鄰的獨立 `facebook-public-group-scraper-standalone` 專案建置，不建立 fork 或原作者依賴。
+7. **Facebook 社團模組**：獨立管理社團來源、抓取任務、runner 日誌與貼文結果；結果頁支援日期、來源、狀態、文字篩選與分頁，完整內容以詳細視窗載入；抓取程式以相鄰的獨立 `facebook-public-group-scraper-standalone` 專案建置，不建立 fork 或原作者依賴。
 
 ---
 

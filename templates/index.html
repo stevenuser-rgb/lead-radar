@@ -376,7 +376,11 @@
                     <option value="1440" {% if settings.facebook_scan_interval_minutes == '1440' %}selected{% endif %}>每天一次</option>
                   </select>
                 </label>
+                <label class="text-xs text-slate-600">原始貼文保留
+                  <input type="number" id="cfg-facebook-retention" value="{{ settings.facebook_retention_days }}" min="30" max="365" class="ml-1 w-20 px-2 py-1 bg-white border border-slate-300 rounded text-center"> 天
+                </label>
               </div>
+              <p class="text-[11px] text-slate-400 pl-6">超過保留天數的未命中、略過、重複與錯誤原始貼文會自動清理；命中需求不會清除。</p>
               <div class="flex items-center space-x-2 mb-2">
                 <input type="checkbox" id="cfg-hours-limit" {% if settings.enable_hours_limit == '1' %}checked{% endif %} class="w-4 h-4 text-indigo-600 rounded">
                 <label for="cfg-hours-limit" class="text-xs font-semibold text-slate-700">限制特定時段才執行掃描（非指定時段暫停）</label>
@@ -573,6 +577,7 @@
       formData.append('facebook_scan_enabled', document.getElementById('cfg-facebook-scan-enabled').checked ? '1' : '0');
       formData.append('facebook_auto_scan_enabled', document.getElementById('cfg-facebook-auto-scan-enabled').checked ? '1' : '0');
       formData.append('facebook_scan_interval_minutes', document.getElementById('cfg-facebook-interval').value);
+      formData.append('facebook_retention_days', document.getElementById('cfg-facebook-retention').value);
       formData.append('scan_interval_minutes', document.getElementById('cfg-interval').value);
       formData.append('enable_hours_limit', document.getElementById('cfg-hours-limit').checked ? '1' : '0');
       formData.append('active_start_hour', document.getElementById('cfg-start-hour').value);

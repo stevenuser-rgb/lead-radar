@@ -38,6 +38,7 @@ from database import (
     save_skipped,
 )
 from scheduler import background_scheduler_loop, run_scan_cycle, get_next_scan_time_str
+from facebook_scheduler import background_facebook_scheduler_loop
 from notifier import send_lead_notification
 from scraper import ThreadsSearchError, fetch_threads_posts, fetch_apify_posts
 from ai_engine import call_gemini_api
@@ -56,8 +57,10 @@ from facebook_runner import (
 async def lifespan(app: FastAPI):
     init_db()
     bg_task = asyncio.create_task(background_scheduler_loop())
+    facebook_bg_task = asyncio.create_task(background_facebook_scheduler_loop())
     yield
     bg_task.cancel()
+    facebook_bg_task.cancel()
 
 app = FastAPI(title="私有需求雷達 (Lead Radar)", lifespan=lifespan)
 templates = Jinja2Templates(directory="templates")
@@ -88,6 +91,8 @@ async def index(request: Request):
         "collection_days": get_setting("collection_days", "7"),
         "scan_enabled": get_setting("scan_enabled", "1"),
         "facebook_scan_enabled": get_setting("facebook_scan_enabled", "1"),
+        "facebook_auto_scan_enabled": get_setting("facebook_auto_scan_enabled", "0"),
+        "facebook_scan_interval_minutes": get_setting("facebook_scan_interval_minutes", "60"),
         "scan_interval_minutes": get_setting("scan_interval_minutes", "10"),
         "enable_hours_limit": get_setting("enable_hours_limit", "0"),
         "active_start_hour": get_setting("active_start_hour", "8"),
@@ -267,6 +272,8 @@ async def facebook_page(request: Request):
             "jobs": jobs,
             "posts": get_facebook_posts(limit=100),
             "facebook_scan_enabled": get_setting("facebook_scan_enabled", "1") == "1",
+            "facebook_auto_scan_enabled": get_setting("facebook_auto_scan_enabled", "0") == "1",
+            "facebook_scan_interval_minutes": get_setting("facebook_scan_interval_minutes", "60"),
             "runner_url": os.getenv("FACEBOOK_RUNNER_URL", "http://facebook-runner:9090"),
             "runner_available": runner_health() is not None,
         },
@@ -429,6 +436,8 @@ async def api_save_settings(
     collection_days: str = Form("7"),
     scan_enabled: str = Form("1"),
     facebook_scan_enabled: str = Form("1"),
+    facebook_auto_scan_enabled: str = Form("0"),
+    facebook_scan_interval_minutes: str = Form("60"),
     scan_interval_minutes: str = Form("10"),
     enable_hours_limit: str = Form("0"),
     active_start_hour: str = Form("8"),
@@ -454,6 +463,12 @@ async def api_save_settings(
     set_setting("collection_days", str(days))
     set_setting("scan_enabled", "1" if scan_enabled == "1" else "0")
     set_setting("facebook_scan_enabled", "1" if facebook_scan_enabled == "1" else "0")
+    set_setting("facebook_auto_scan_enabled", "1" if facebook_auto_scan_enabled == "1" else "0")
+    try:
+        facebook_interval = max(30, int(facebook_scan_interval_minutes))
+    except ValueError:
+        facebook_interval = 60
+    set_setting("facebook_scan_interval_minutes", str(facebook_interval))
     set_setting("scan_interval_minutes", scan_interval_minutes.strip())
     set_setting("enable_hours_limit", enable_hours_limit.strip())
     set_setting("active_start_hour", active_start_hour.strip())

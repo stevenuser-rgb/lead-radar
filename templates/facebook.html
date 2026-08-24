@@ -34,7 +34,7 @@
         <i class="fa-solid fa-circle mr-1"></i>{% if runner_available %}抓取服務已連線{% else %}抓取服務未連線{% endif %}
       </div>
     </div>
-    {% if not facebook_scan_enabled %}<div class="px-4 py-3 rounded-lg border border-amber-200 bg-amber-50 text-amber-800 text-sm"><i class="fa-solid fa-pause mr-2"></i>Facebook 掃描系統目前已關閉。請到「系統設定」開啟後，才可啟動手動抓取。</div>{% endif %}
+    {% if not facebook_scan_enabled %}<div class="px-4 py-3 rounded-lg border border-amber-200 bg-amber-50 text-amber-800 text-sm"><i class="fa-solid fa-pause mr-2"></i>Facebook 掃描系統目前已關閉。請到「系統設定」開啟後，才可啟動手動抓取。</div>{% elif facebook_auto_scan_enabled %}<div class="px-4 py-3 rounded-lg border border-blue-200 bg-blue-50 text-blue-800 text-sm"><i class="fa-solid fa-clock mr-2"></i>Facebook 自動排程已啟用：每 {{ facebook_scan_interval_minutes }} 分鐘檢查一次到期來源。</div>{% endif %}
 
     <section class="grid grid-cols-1 xl:grid-cols-3 gap-6">
       <div class="xl:col-span-1 bg-white rounded-xl border border-slate-200 shadow-sm p-5">

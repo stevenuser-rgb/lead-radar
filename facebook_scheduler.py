@@ -1,0 +1,85 @@
+import asyncio
+import datetime
+from typing import Any, Dict
+
+from database import (
+    create_facebook_job,
+    get_facebook_jobs,
+    get_facebook_sources,
+    get_setting,
+    update_facebook_job,
+)
+from facebook_runner import FacebookRunnerError, submit_facebook_job
+
+
+def _minutes_since(value: str) -> float:
+    try:
+        created = datetime.datetime.strptime(value, "%Y-%m-%d %H:%M:%S")
+        return (datetime.datetime.now() - created).total_seconds() / 60
+    except (TypeError, ValueError):
+        return float("inf")
+
+
+def _source_due(source: Dict[str, Any], jobs: list[Dict[str, Any]], interval_minutes: int) -> bool:
+    source_jobs = [job for job in jobs if job.get("source_id") == source["id"]]
+    if any(job.get("status") in {"queued", "running"} for job in source_jobs):
+        return False
+    latest = source_jobs[0] if source_jobs else None
+    return latest is None or _minutes_since(latest.get("created_at")) >= interval_minutes
+
+
+def _start_due_jobs(interval_minutes: int):
+    if get_setting("facebook_scan_enabled", "1") != "1":
+        return
+    if get_setting("facebook_auto_scan_enabled", "0") != "1":
+        return
+
+    jobs = get_facebook_jobs(limit=100)
+    for source in get_facebook_sources(active_only=True):
+        if not _source_due(source, jobs, interval_minutes):
+            continue
+        job_id = create_facebook_job(source)
+        try:
+            remote = submit_facebook_job(
+                source["group_url"],
+                min(500, int(source.get("max_posts") or 100)),
+                bool(source.get("no_proxy")),
+                source.get("cookies_file", ""),
+            )
+            update_facebook_job(
+                job_id,
+                runner_job_id=remote.get("id"),
+                status=remote.get("status", "running"),
+                started_at=remote.get("startedAt"),
+            )
+        except (FacebookRunnerError, ValueError) as exc:
+            update_facebook_job(
+                job_id,
+                status="failed",
+                error=str(exc),
+                finished_at=datetime.datetime.now().isoformat(timespec="seconds"),
+            )
+
+
+def _sync_running_jobs():
+    # Import lazily to avoid a module cycle during FastAPI startup.
+    from app import _queue_completed_facebook_analysis, _sync_facebook_job
+
+    for job in get_facebook_jobs(limit=100):
+        if job.get("status") in {"queued", "running"} and job.get("runner_job_id"):
+            try:
+                _sync_facebook_job(job)
+            except Exception as exc:
+                update_facebook_job(job["id"], status="error", error=str(exc))
+    _queue_completed_facebook_analysis()
+
+
+async def background_facebook_scheduler_loop():
+    while True:
+        try:
+            interval_minutes = max(30, int(get_setting("facebook_scan_interval_minutes", "60")))
+        except (TypeError, ValueError):
+            interval_minutes = 60
+        _sync_running_jobs()
+        _start_due_jobs(interval_minutes)
+        await asyncio.sleep(60)

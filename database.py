@@ -324,6 +324,18 @@ def get_facebook_jobs(limit: int = 30) -> List[Dict[str, Any]]:
     conn.close()
     return [dict(row) for row in rows]
 
+def get_active_facebook_jobs(scan_mode: Optional[str] = None) -> List[Dict[str, Any]]:
+    conn = get_db()
+    query = "SELECT * FROM facebook_jobs WHERE status IN ('queued', 'running')"
+    params: list[Any] = []
+    if scan_mode:
+        query += " AND scan_mode = ?"
+        params.append(scan_mode)
+    query += " ORDER BY id DESC"
+    rows = conn.execute(query, params).fetchall()
+    conn.close()
+    return [dict(row) for row in rows]
+
 def update_facebook_job(job_id: int, **fields):
     allowed = {"runner_job_id", "status", "started_at", "finished_at", "exit_code", "error", "output_dir"}
     values = [(key, value) for key, value in fields.items() if key in allowed]

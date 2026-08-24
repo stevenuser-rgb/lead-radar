@@ -28,6 +28,7 @@ from database import (
     create_facebook_job,
     get_facebook_job,
     get_facebook_jobs,
+    get_active_facebook_jobs,
     update_facebook_job,
     save_facebook_posts,
     get_facebook_post_page,
@@ -308,6 +309,7 @@ async def facebook_page(request: Request):
             "facebook_scan_interval_minutes": get_setting("facebook_scan_interval_minutes", "60"),
             "facebook_monitor_enabled": get_setting("facebook_monitor_enabled", "0") == "1",
             "facebook_monitor_interval_minutes": get_setting("facebook_monitor_interval_minutes", "60"),
+            "deep_scan_active": bool(get_active_facebook_jobs("deep")),
             "runner_url": os.getenv("FACEBOOK_RUNNER_URL", "http://facebook-runner:9090"),
             "runner_available": runner_health() is not None,
         },
@@ -369,6 +371,11 @@ async def api_create_facebook_job(source_id: int = Form(...), scan_mode: str = F
         return JSONResponse(status_code=400, content={"status": "error", "message": "請先啟用這個社團來源"})
     if scan_mode not in {"normal", "deep", "monitor"}:
         return JSONResponse(status_code=400, content={"status": "error", "message": "抓取模式不正確"})
+    active_jobs = get_active_facebook_jobs()
+    if scan_mode == "deep" and active_jobs:
+        return JSONResponse(status_code=409, content={"status": "error", "message": "目前已有 Facebook 任務執行中，深度掃描會在其他任務完成後再啟動"})
+    if scan_mode != "deep" and any(job.get("scan_mode") == "deep" for job in active_jobs):
+        return JSONResponse(status_code=409, content={"status": "error", "message": "深度掃描執行中，一般抓取與監控已暫停，請等待深度任務完成"})
     if scan_mode == "monitor":
         if get_setting("facebook_monitor_enabled", "0") != "1":
             return JSONResponse(status_code=403, content={"status": "error", "message": "請先在系統設定啟用 Facebook 持續監控架構"})

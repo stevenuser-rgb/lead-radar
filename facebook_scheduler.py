@@ -5,6 +5,7 @@ from typing import Any, Dict
 from database import (
     create_facebook_job,
     get_facebook_jobs,
+    get_active_facebook_jobs,
     get_facebook_sources,
     get_setting,
     clean_facebook_posts,
@@ -38,6 +39,8 @@ def _start_due_jobs(interval_minutes: int):
     if get_setting("facebook_scan_enabled", "1") != "1":
         return
     if get_setting("facebook_auto_scan_enabled", "0") != "1":
+        return
+    if get_active_facebook_jobs("deep"):
         return
 
     jobs = get_facebook_jobs(limit=100)
@@ -73,6 +76,8 @@ def _start_due_monitor_jobs(interval_minutes: int):
     if get_setting("facebook_scan_enabled", "1") != "1":
         return
     if get_setting("facebook_monitor_enabled", "0") != "1":
+        return
+    if get_active_facebook_jobs("deep"):
         return
 
     jobs = get_facebook_jobs(limit=100)

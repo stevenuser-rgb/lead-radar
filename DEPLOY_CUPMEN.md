@@ -75,7 +75,7 @@ Facebook Cookie 檔案若要使用，請以主機檔案放在：
 
 後台欄位填入容器路徑 `/app/cookies/cookies.json`。Cookie 不應提交到 Git，也不要貼到聊天或日誌。
 
-也可以直接在 Facebook 後台的「Facebook 登入 Cookie」區塊上傳檔名為 `cookies.json` 的檔案。系統會驗證 JSON 格式後，以權限 `600` 寫入 `data/facebook-cookies/cookies.json`；未另外指定 Cookie 路徑的來源會自動使用 `/app/cookies/cookies.json`。Cookie 過期或 Facebook 導向登入頁時，請重新匯出並上傳，不要在系統中自動重試登入。
+也可以直接在 Facebook 後台的「Facebook 登入 Cookie」區塊上傳檔名為 `cookies.json` 的檔案。系統會驗證 JSON 格式後，以權限 `600` 寫入 `data/facebook-cookies/cookies.json`；只有持續監控任務會使用 `/app/cookies/cookies.json`，一般與深度抓取固定不帶 Cookie。Cookie 過期或 Facebook 導向登入頁時，請重新匯出並上傳，不要在系統中自動重試登入。
 
 持續監控使用 `data/facebook-monitor-output` 與 `data/facebook-state`。若出現 `EACCES: permission denied, mkdir /app/monitor-output`，重新執行上方的 `chown`／`chmod` 後再重啟 `facebook-runner`。
 

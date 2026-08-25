@@ -434,7 +434,8 @@ async def api_create_facebook_job(source_id: int = Form(...), scan_mode: str = F
     )
     job_id = create_facebook_job(source, scan_mode=scan_mode)
     try:
-        cookies_file = runner_cookie_path(source.get("cookies_file", ""))
+        # Anonymous mode is intentional: only the independent monitor runner may use login cookies.
+        cookies_file = runner_cookie_path(source.get("cookies_file", "")) if scan_mode == "monitor" else ""
         remote = submit_facebook_job(
             source["group_url"],
             int(source["max_posts"]),

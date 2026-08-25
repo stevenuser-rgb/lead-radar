@@ -56,7 +56,7 @@ def _start_due_jobs(interval_minutes: int):
                 source["group_url"],
                 min(500, int(source.get("max_posts") or 100)),
                 bool(source.get("no_proxy")),
-                runner_cookie_path(source.get("cookies_file", "")),
+                "",
             )
             update_facebook_job(
                 job_id,

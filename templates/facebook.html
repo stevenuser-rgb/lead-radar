@@ -36,9 +36,9 @@
         <i class="fa-solid fa-circle mr-1"></i>{% if runner_available %}抓取服務已連線{% else %}抓取服務未連線{% endif %}
       </div>
     </div>
-    {% if not facebook_scan_enabled %}<div class="px-4 py-3 rounded-lg border border-amber-200 bg-amber-50 text-amber-800 text-sm"><i class="fa-solid fa-pause mr-2"></i>Facebook 掃描系統目前已關閉。請到「系統設定」開啟後，才可啟動手動抓取。</div>{% elif facebook_auto_scan_enabled %}<div class="px-4 py-3 rounded-lg border border-blue-200 bg-blue-50 text-blue-800 text-sm"><i class="fa-solid fa-clock mr-2"></i>Facebook 自動排程已啟用：每 {{ facebook_scan_interval_minutes }} 分鐘檢查一次到期來源。</div>{% endif %}
-    {% if facebook_monitor_enabled %}<div class="px-4 py-3 rounded-lg border border-violet-200 bg-violet-50 text-violet-800 text-sm"><i class="fa-solid fa-binoculars mr-2"></i>持續監控架構已啟用：只有標記「監控中」的來源會依 {{ facebook_monitor_interval_minutes }} 分鐘輪詢，並沿用關鍵字與 AI 分析。</div>{% else %}<div class="px-4 py-3 rounded-lg border border-slate-200 bg-slate-100 text-slate-600 text-sm"><i class="fa-solid fa-toggle-off mr-2"></i>持續監控架構目前關閉；一般與深度抓取功能不受影響。</div>{% endif %}
-    {% if deep_scan_active %}<div class="px-4 py-3 rounded-lg border border-indigo-200 bg-indigo-50 text-indigo-800 text-sm"><i class="fa-solid fa-layer-group mr-2"></i>深度掃描執行中：一般抓取、自動排程與監控輪詢暫停，完成後自動恢復。</div>{% endif %}
+    {% if not facebook_scan_enabled %}<div class="px-4 py-3 rounded-lg border border-amber-200 bg-amber-50 text-amber-800 text-sm"><i class="fa-solid fa-pause mr-2"></i>Facebook 掃描系統目前已關閉。請到「系統設定」開啟後，才可啟動三種模式。</div>{% elif facebook_auto_scan_enabled %}<div class="px-4 py-3 rounded-lg border border-blue-200 bg-blue-50 text-blue-800 text-sm"><i class="fa-solid fa-clock mr-2"></i>模式 1「一般掃描」自動排程已啟用：每 {{ facebook_scan_interval_minutes }} 分鐘檢查一次到期來源。</div>{% endif %}
+    {% if facebook_monitor_enabled %}<div class="px-4 py-3 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-800 text-sm"><i class="fa-solid fa-binoculars mr-2"></i>模式 3「登入監控」已啟用：只有個別開啟登入監控的社團，才會每 {{ facebook_monitor_interval_minutes }} 分鐘檢查新貼文。</div>{% else %}<div class="px-4 py-3 rounded-lg border border-slate-200 bg-slate-100 text-slate-600 text-sm"><i class="fa-solid fa-toggle-off mr-2"></i>模式 3「登入監控」目前關閉；模式 1 一般掃描與模式 2 深度搜尋仍可使用。</div>{% endif %}
+    {% if deep_scan_active %}<div class="px-4 py-3 rounded-lg border border-amber-200 bg-amber-50 text-amber-800 text-sm"><i class="fa-solid fa-layer-group mr-2"></i>模式 2「深度搜尋」執行中：一般掃描、自動排程與登入監控暫停，完成後自動恢復。</div>{% endif %}
 
     <section aria-label="Facebook 統計" class="space-y-4">
       <div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
@@ -51,20 +51,76 @@
       </div>
     </section>
 
+    <section aria-labelledby="scan-mode-title" class="space-y-3">
+      <div class="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h3 id="scan-mode-title" class="font-bold text-slate-900">選擇 Facebook 掃描方式</h3>
+          <p class="mt-1 text-xs text-slate-500">三種方式的登入需求與執行時機不同，結果都會進入關鍵字與 AI 分析。</p>
+        </div>
+        <span class="text-xs text-slate-500">一般使用模式 1，需要更多舊貼文才使用模式 2。</span>
+      </div>
+      <div class="grid grid-cols-1 gap-3 lg:grid-cols-3">
+        <article class="rounded-lg border border-blue-200 border-t-4 border-t-blue-500 bg-white p-4 shadow-sm">
+          <div class="flex items-start justify-between gap-3">
+            <div class="flex items-center gap-2">
+              <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-100 font-bold text-blue-700">1</span>
+              <div><h4 class="font-bold text-slate-900">一般掃描</h4><p class="text-xs text-slate-500">公開社團快速檢查</p></div>
+            </div>
+            <span class="whitespace-nowrap rounded-full bg-blue-50 px-2 py-1 text-[11px] font-semibold text-blue-700">不需登入</span>
+          </div>
+          <dl class="mt-4 grid grid-cols-[5rem_1fr] gap-x-2 gap-y-2 text-xs">
+            <dt class="text-slate-500">適合</dt><dd class="font-medium text-slate-700">日常抓取最新公開貼文</dd>
+            <dt class="text-slate-500">啟動方式</dt><dd class="font-medium text-slate-700">手動或自動排程</dd>
+            <dt class="text-slate-500">掃描數量</dt><dd class="font-medium text-slate-700">依各社團設定上限</dd>
+          </dl>
+        </article>
+
+        <article class="rounded-lg border border-amber-200 border-t-4 border-t-amber-500 bg-white p-4 shadow-sm">
+          <div class="flex items-start justify-between gap-3">
+            <div class="flex items-center gap-2">
+              <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-100 font-bold text-amber-700">2</span>
+              <div><h4 class="font-bold text-slate-900">深度搜尋</h4><p class="text-xs text-slate-500">往下尋找更多舊貼文</p></div>
+            </div>
+            <span class="whitespace-nowrap rounded-full bg-amber-50 px-2 py-1 text-[11px] font-semibold text-amber-700">不需登入</span>
+          </div>
+          <dl class="mt-4 grid grid-cols-[5rem_1fr] gap-x-2 gap-y-2 text-xs">
+            <dt class="text-slate-500">適合</dt><dd class="font-medium text-slate-700">一般掃描數量不足時</dd>
+            <dt class="text-slate-500">啟動方式</dt><dd class="font-medium text-slate-700">只能手動啟動</dd>
+            <dt class="text-slate-500">執行限制</dt><dd class="font-medium text-slate-700">最多 500 篇，期間暫停其他 Facebook 任務</dd>
+          </dl>
+        </article>
+
+        <article class="rounded-lg border border-emerald-200 border-t-4 border-t-emerald-500 bg-white p-4 shadow-sm">
+          <div class="flex items-start justify-between gap-3">
+            <div class="flex items-center gap-2">
+              <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-100 font-bold text-emerald-700">3</span>
+              <div><h4 class="font-bold text-slate-900">登入監控</h4><p class="text-xs text-slate-500">定期檢查登入後的新貼文</p></div>
+            </div>
+            <span class="whitespace-nowrap rounded-full bg-emerald-50 px-2 py-1 text-[11px] font-semibold text-emerald-700">需要登入</span>
+          </div>
+          <dl class="mt-4 grid grid-cols-[5rem_1fr] gap-x-2 gap-y-2 text-xs">
+            <dt class="text-slate-500">適合</dt><dd class="font-medium text-slate-700">持續追蹤帳號有權限查看的社團</dd>
+            <dt class="text-slate-500">啟動方式</dt><dd class="font-medium text-slate-700">全域開關、社團開關都要開啟</dd>
+            <dt class="text-slate-500">登入狀態</dt><dd class="font-medium {% if facebook_cookie_available %}text-emerald-700{% else %}text-rose-700{% endif %}">{% if facebook_cookie_available %}Cookie 已匯入{% else %}尚未匯入 Cookie{% endif %}</dd>
+          </dl>
+        </article>
+      </div>
+    </section>
+
     <section class="grid grid-cols-1 xl:grid-cols-3 gap-6">
       <div class="xl:col-span-1 bg-white rounded-xl border border-slate-200 shadow-sm p-5">
         <div class="flex items-center justify-between mb-4">
           <div><h3 class="font-bold text-slate-900">社團來源管理</h3><p class="text-xs text-slate-500 mt-1">先加入來源，再啟動抓取任務</p></div>
           <i class="fa-solid fa-link text-blue-600"></i>
         </div>
-        <div class="mb-5 rounded-lg border border-violet-200 bg-violet-50 p-3">
+        <div id="cookie-settings" class="mb-5 rounded-lg border border-emerald-200 bg-emerald-50 p-3">
           <div class="flex items-center justify-between gap-2">
-            <div><h4 class="text-sm font-semibold text-violet-900">Facebook 登入 Cookie</h4><p class="text-[11px] text-violet-700 mt-1">僅供持續監控 Runner 使用，不會保存到資料庫。</p></div>
-            <i class="fa-solid fa-key text-violet-600"></i>
+            <div><h4 class="text-sm font-semibold text-emerald-900">模式 3 專用：登入監控 Cookie</h4><p class="text-[11px] text-emerald-700 mt-1">一般掃描與深度搜尋不會使用這份 Cookie。</p></div>
+            <i class="fa-solid fa-key text-emerald-600"></i>
           </div>
           <form id="cookies-upload-form" class="mt-3 space-y-2" enctype="multipart/form-data">
-            <input id="cookies-file" name="file" type="file" accept=".json,application/json" required class="block w-full text-xs text-slate-600 file:mr-2 file:rounded-md file:border-0 file:bg-violet-600 file:px-2.5 file:py-1.5 file:text-xs file:font-semibold file:text-white hover:file:bg-violet-700">
-            <button class="w-full px-3 py-2 rounded-lg bg-violet-600 hover:bg-violet-700 text-white text-xs font-semibold"><i class="fa-solid fa-upload mr-1"></i>匯入 cookies.json</button>
+            <input id="cookies-file" name="file" type="file" accept=".json,application/json" required class="block w-full text-xs text-slate-600 file:mr-2 file:rounded-md file:border-0 file:bg-emerald-600 file:px-2.5 file:py-1.5 file:text-xs file:font-semibold file:text-white hover:file:bg-emerald-700">
+            <button class="w-full px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold"><i class="fa-solid fa-upload mr-1"></i>匯入登入 Cookie</button>
           </form>
           <p class="text-[11px] mt-2 {% if facebook_cookie_available %}text-emerald-700{% else %}text-slate-600{% endif %}">{% if facebook_cookie_available %}目前已匯入 Cookie，Runner 路徑：{{ facebook_cookie_path }}{% else %}尚未匯入 Cookie；Runner 路徑：{{ facebook_cookie_path }}{% endif %}</p>
           <p id="cookies-message" class="text-[11px] mt-1"></p>
@@ -76,12 +132,7 @@
             <label class="block"><span class="text-xs font-semibold text-slate-600">最多貼文數</span><input name="max_posts" type="number" min="1" max="500" value="100" class="mt-1 w-full rounded-lg border-slate-300 text-sm"></label>
             <label class="flex items-end gap-2 pb-2 text-sm"><input name="no_proxy" type="checkbox" value="1" checked class="rounded border-slate-300 text-blue-600"><span>直接連線</span></label>
           </div>
-          <details class="rounded-lg bg-slate-50 border border-slate-200 p-3">
-            <summary class="cursor-pointer text-sm font-semibold text-slate-700">Cookie／進階設定</summary>
-            <label class="block mt-3"><span class="text-xs text-slate-600">監控用容器內 cookies.json 路徑（可留白）</span><input name="cookies_file" value="{% if facebook_cookie_available %}{{ facebook_cookie_path }}{% endif %}" placeholder="/app/cookies/cookies.json" class="mt-1 w-full rounded-lg border-slate-300 text-sm"></label>
-            <p class="text-[11px] text-slate-500 mt-2">Cookie 僅套用於持續監控；一般與深度抓取維持匿名模式。Cookie 檔案不會提交到 Git。</p>
-          </details>
-          <p class="text-[11px] text-slate-500">一般抓取依來源上限執行；深度搜尋僅供手動使用，最多 500 篇並增加無新貼文檢查次數。同一社團完成後預設至少等待 30 分鐘。</p>
+          <p class="text-[11px] text-slate-500">一般掃描依來源上限執行；深度搜尋僅供手動使用，最多 500 篇並增加無新貼文檢查次數。同一社團完成後預設至少等待 30 分鐘。</p>
           <button class="w-full px-4 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold"><i class="fa-solid fa-plus mr-1"></i>加入社團來源</button>
         </form>
         <p id="source-message" class="text-xs mt-3"></p>
@@ -91,7 +142,7 @@
         <div class="flex items-center justify-between mb-4"><div><h3 class="font-bold text-slate-900">已加入的社團來源</h3><p class="text-xs text-slate-500 mt-1">停用來源不會被啟動新任務</p></div><span class="text-xs text-slate-400">{{ sources|length }} 個來源</span></div>
         <div class="overflow-x-auto"><table class="w-full text-left text-sm"><thead class="text-xs text-slate-500 border-b border-slate-200"><tr><th class="py-2 pr-3">名稱</th><th class="py-2 pr-3">網址</th><th class="py-2 pr-3">設定</th><th class="py-2 text-right">操作</th></tr></thead><tbody>
         {% for source in sources %}
-          <tr class="border-b border-slate-100"><td class="py-3 pr-3 font-semibold text-slate-800">{{ source.name }}</td><td class="py-3 pr-3 max-w-[260px] truncate text-xs text-slate-500" title="{{ source.group_url }}">{{ source.group_url }}</td><td class="py-3 pr-3 text-xs text-slate-500">{{ source.max_posts }} 篇 · {% if source.no_proxy %}直接{% else %}Proxy{% endif %} · <span class="{% if source.is_active %}text-emerald-600{% else %}text-slate-400{% endif %}">{% if source.is_active %}啟用{% else %}停用{% endif %}</span> · <span class="{% if source.monitor_enabled and facebook_monitor_enabled %}text-violet-600{% else %}text-slate-400{% endif %}">{% if source.monitor_enabled and facebook_monitor_enabled %}監控中{% else %}未監控{% endif %}</span></td><td class="py-3 text-right whitespace-nowrap"><button onclick="toggleSource({{ source.id }}, {{ 0 if source.is_active else 1 }})" class="text-xs px-2 py-1 rounded border border-slate-300 text-slate-600 hover:bg-slate-50 mr-1">{% if source.is_active %}停用{% else %}啟用{% endif %}</button><button {% if not facebook_monitor_enabled %}disabled{% endif %} onclick="toggleMonitor({{ source.id }}, {{ 0 if source.monitor_enabled else 1 }})" class="text-xs px-2 py-1 rounded border border-violet-200 text-violet-700 hover:bg-violet-50 disabled:opacity-40 mr-1">{% if source.monitor_enabled %}關閉監控{% else %}開啟監控{% endif %}</button><button {% if not source.is_active or not facebook_scan_enabled or deep_scan_active %}disabled{% endif %} onclick="runJob({{ source.id }}, 'normal')" class="text-xs px-2 py-1 rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-40"><i class="fa-solid fa-play mr-1"></i>抓取</button><button {% if not source.is_active or not facebook_scan_enabled or deep_scan_active %}disabled{% endif %} onclick="runJob({{ source.id }}, 'deep')" title="手動增加抓取深度" class="text-xs px-2 py-1 rounded bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-40 ml-1"><i class="fa-solid fa-layer-group mr-1"></i>深度</button><button {% if not source.is_active or not facebook_scan_enabled or not facebook_monitor_enabled or not source.monitor_enabled or deep_scan_active %}disabled{% endif %} onclick="runJob({{ source.id }}, 'monitor')" title="立即執行一次監控輪詢" class="text-xs px-2 py-1 rounded bg-violet-600 text-white hover:bg-violet-700 disabled:opacity-40 ml-1"><i class="fa-solid fa-binoculars mr-1"></i>監控</button></td></tr>
+          <tr class="border-b border-slate-100"><td class="py-3 pr-3 font-semibold text-slate-800">{{ source.name }}</td><td class="py-3 pr-3 max-w-[260px] truncate text-xs text-slate-500" title="{{ source.group_url }}">{{ source.group_url }}</td><td class="py-3 pr-3 text-xs text-slate-500">{{ source.max_posts }} 篇 · {% if source.no_proxy %}直接{% else %}Proxy{% endif %} · <span class="{% if source.is_active %}text-emerald-600{% else %}text-slate-400{% endif %}">{% if source.is_active %}來源已啟用{% else %}來源已停用{% endif %}</span> · <span class="{% if source.monitor_enabled and facebook_monitor_enabled %}text-emerald-600{% else %}text-slate-400{% endif %}">{% if source.monitor_enabled and facebook_monitor_enabled %}登入監控已開啟{% else %}登入監控未開啟{% endif %}</span></td><td class="py-3 text-right whitespace-nowrap"><button title="啟用或停用這個社團來源" onclick="toggleSource({{ source.id }}, {{ 0 if source.is_active else 1 }})" class="text-xs px-2 py-1 rounded border border-slate-300 text-slate-600 hover:bg-slate-50 mr-1">{% if source.is_active %}停用來源{% else %}啟用來源{% endif %}</button><button {% if not facebook_monitor_enabled %}disabled{% endif %} title="模式 3：切換這個社團的登入監控排程" onclick="toggleMonitor({{ source.id }}, {{ 0 if source.monitor_enabled else 1 }})" class="text-xs px-2 py-1 rounded border border-emerald-200 text-emerald-700 hover:bg-emerald-50 disabled:opacity-40 mr-1">{% if source.monitor_enabled %}關閉登入監控{% else %}開啟登入監控{% endif %}</button><button {% if not source.is_active or not facebook_scan_enabled or deep_scan_active %}disabled{% endif %} title="模式 1：不登入，掃描公開社團" onclick="runJob({{ source.id }}, 'normal')" class="text-xs px-2 py-1 rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-40"><i class="fa-solid fa-play mr-1"></i>一般掃描</button><button {% if not source.is_active or not facebook_scan_enabled or deep_scan_active %}disabled{% endif %} title="模式 2：不登入，手動搜尋更多舊貼文" onclick="runJob({{ source.id }}, 'deep')" class="text-xs px-2 py-1 rounded bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-40 ml-1"><i class="fa-solid fa-layer-group mr-1"></i>深度搜尋</button><button {% if not source.is_active or not facebook_scan_enabled or not facebook_monitor_enabled or not source.monitor_enabled or deep_scan_active %}disabled{% endif %} title="模式 3：使用登入狀態立即檢查新貼文" onclick="runJob({{ source.id }}, 'monitor')" class="text-xs px-2 py-1 rounded bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-40 ml-1"><i class="fa-solid fa-binoculars mr-1"></i>立即監控</button></td></tr>
         {% else %}<tr><td colspan="4" class="py-8 text-center text-sm text-slate-400">尚未加入社團來源</td></tr>{% endfor %}
         </tbody></table></div>
       </div>
@@ -100,7 +151,7 @@
     <section class="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
       <div class="flex items-center justify-between mb-4"><div><h3 class="font-bold text-slate-900">抓取任務</h3><p class="text-xs text-slate-500 mt-1">任務狀態保留在 Lead Radar；抓取程序由獨立 runner 執行</p></div><button onclick="location.reload()" class="text-xs px-3 py-2 rounded-lg border border-slate-300 text-slate-600 hover:bg-slate-50"><i class="fa-solid fa-rotate mr-1"></i>更新</button></div>
       <div class="overflow-x-auto"><table class="w-full text-left text-sm"><thead class="text-xs text-slate-500 border-b border-slate-200"><tr><th class="py-2 pr-3">任務</th><th class="py-2 pr-3">來源</th><th class="py-2 pr-3">模式</th><th class="py-2 pr-3">狀態</th><th class="py-2 pr-3">建立時間</th><th class="py-2 text-right">操作</th></tr></thead><tbody>
-      {% for job in jobs %}<tr class="border-b border-slate-100"><td class="py-3 pr-3 font-mono text-xs">#{{ job.id }}</td><td class="py-3 pr-3">{{ job.source_name }}</td><td class="py-3 pr-3 text-xs">{% if job.scan_mode == 'deep' %}<span class="mode-deep px-2 py-1 rounded-full">深度</span>{% elif job.scan_mode == 'monitor' %}<span class="mode-monitor px-2 py-1 rounded-full">監控</span>{% else %}<span class="mode-normal px-2 py-1 rounded-full">一般</span>{% endif %}</td><td class="py-3 pr-3"><span class="status-{{ job.status }} px-2 py-1 rounded-full text-xs">{{ job.status }}</span>{% if job.error %}<div class="text-[11px] text-red-600 mt-1 max-w-md">{{ job.error }}</div>{% endif %}</td><td class="py-3 pr-3 text-xs text-slate-500">{{ job.created_at }}</td><td class="py-3 text-right whitespace-nowrap"><button onclick="showLogs({{ job.id }})" class="text-xs px-2 py-1 rounded border border-slate-300 text-slate-600 hover:bg-slate-50">日誌</button>{% if job.status == 'running' %}<button onclick="cancelJob({{ job.id }})" class="text-xs px-2 py-1 rounded border border-red-200 text-red-600 hover:bg-red-50 ml-1">取消</button>{% endif %}</td></tr>
+      {% for job in jobs %}<tr class="border-b border-slate-100"><td class="py-3 pr-3 font-mono text-xs">#{{ job.id }}</td><td class="py-3 pr-3">{{ job.source_name }}</td><td class="py-3 pr-3 text-xs">{% if job.scan_mode == 'deep' %}<span class="mode-deep px-2 py-1 rounded-full">深度搜尋</span>{% elif job.scan_mode == 'monitor' %}<span class="mode-monitor px-2 py-1 rounded-full">登入監控</span>{% else %}<span class="mode-normal px-2 py-1 rounded-full">一般掃描</span>{% endif %}</td><td class="py-3 pr-3"><span class="status-{{ job.status }} px-2 py-1 rounded-full text-xs">{{ job.status }}</span>{% if job.error %}<div class="text-[11px] text-red-600 mt-1 max-w-md">{{ job.error }}</div>{% endif %}</td><td class="py-3 pr-3 text-xs text-slate-500">{{ job.created_at }}</td><td class="py-3 text-right whitespace-nowrap"><button onclick="showLogs({{ job.id }})" class="text-xs px-2 py-1 rounded border border-slate-300 text-slate-600 hover:bg-slate-50">日誌</button>{% if job.status == 'running' %}<button onclick="cancelJob({{ job.id }})" class="text-xs px-2 py-1 rounded border border-red-200 text-red-600 hover:bg-red-50 ml-1">取消</button>{% endif %}</td></tr>
       {% else %}<tr><td colspan="6" class="py-8 text-center text-sm text-slate-400">尚未建立抓取任務</td></tr>{% endfor %}
       </tbody></table></div>
     </section>
@@ -140,11 +191,11 @@
     async function parseResponse(response) { const data = await response.json(); if (!response.ok) throw new Error(data.message || '操作失敗'); return data; }
     function message(text, error = false) { const el = document.getElementById('source-message'); el.textContent = text; el.className = `text-xs mt-3 ${error ? 'text-red-600' : 'text-emerald-600'}`; }
     function cookieMessage(text, error = false) { const el = document.getElementById('cookies-message'); el.textContent = text; el.className = `text-[11px] mt-1 ${error ? 'text-red-600' : 'text-emerald-700'}`; }
-    document.getElementById('cookies-upload-form').addEventListener('submit', async (event) => { event.preventDefault(); cookieMessage('匯入中…'); try { await parseResponse(await fetch('/api/facebook/cookies', { method: 'POST', body: new FormData(event.target) })); cookieMessage('Cookie 已匯入，重新整理後會套用到新任務。'); setTimeout(() => location.reload(), 500); } catch (error) { cookieMessage(error.message, true); } });
+    document.getElementById('cookies-upload-form').addEventListener('submit', async (event) => { event.preventDefault(); cookieMessage('匯入中…'); try { await parseResponse(await fetch('/api/facebook/cookies', { method: 'POST', body: new FormData(event.target) })); cookieMessage('登入 Cookie 已匯入，重新整理後會套用到新的登入監控任務。'); setTimeout(() => location.reload(), 500); } catch (error) { cookieMessage(error.message, true); } });
     document.getElementById('source-form').addEventListener('submit', async (event) => { event.preventDefault(); message('儲存中…'); try { const form = new FormData(event.target); if (!form.get('no_proxy')) form.set('no_proxy', '0'); await parseResponse(await fetch('/api/facebook/sources', { method: 'POST', body: form })); message('來源已加入'); setTimeout(() => location.reload(), 400); } catch (error) { message(error.message, true); } });
     async function toggleSource(id, active) { try { const form = new FormData(); form.set('is_active', active); await parseResponse(await fetch(`/api/facebook/sources/${id}/toggle`, { method: 'POST', body: form })); location.reload(); } catch (error) { alert(error.message); } }
     async function toggleMonitor(id, enabled) { try { const form = new FormData(); form.set('enabled', enabled); await parseResponse(await fetch(`/api/facebook/sources/${id}/monitor`, { method: 'POST', body: form })); location.reload(); } catch (error) { alert(error.message); } }
-    async function runJob(sourceId, scanMode = 'normal') { if (scanMode === 'deep' && !confirm('深度搜尋會增加滑動與請求次數，確定要手動啟動嗎？')) return; if (scanMode === 'monitor' && !confirm('立即執行一次監控輪詢？會使用固定登入狀態目錄，完成後由排程依頻率再次檢查。')) return; try { const form = new FormData(); form.set('source_id', sourceId); form.set('scan_mode', scanMode); await parseResponse(await fetch('/api/facebook/jobs', { method: 'POST', body: form })); location.reload(); } catch (error) { alert(error.message); } }
+    async function runJob(sourceId, scanMode = 'normal') { if (scanMode === 'deep' && !confirm('模式 2 深度搜尋會增加滑動與請求次數，確定要手動啟動嗎？')) return; if (scanMode === 'monitor' && !confirm('立即執行一次模式 3 登入監控？這次檢查會使用已匯入的登入狀態。')) return; try { const form = new FormData(); form.set('source_id', sourceId); form.set('scan_mode', scanMode); await parseResponse(await fetch('/api/facebook/jobs', { method: 'POST', body: form })); location.reload(); } catch (error) { alert(error.message); } }
     async function cancelJob(id) { if (!confirm('確定取消這個抓取任務？')) return; try { await parseResponse(await fetch(`/api/facebook/jobs/${id}/cancel`, { method: 'POST' })); location.reload(); } catch (error) { alert(error.message); } }
     async function showLogs(id) { const dialog = document.getElementById('log-dialog'); const content = document.getElementById('log-content'); dialog.classList.remove('hidden'); content.textContent = '讀取中…'; try { const data = await parseResponse(await fetch(`/api/facebook/jobs/${id}/logs`)); content.textContent = data.content || '目前沒有日誌'; } catch (error) { content.textContent = error.message; } }
     function closeLogs() { document.getElementById('log-dialog').classList.add('hidden'); }
@@ -156,9 +207,9 @@
     .status-completed { background: #dcfce7; color: #15803d; }
     .status-failed, .status-cancelled { background: #fee2e2; color: #b91c1c; }
     .status-queued { background: #fef3c7; color: #a16207; }
-    .mode-normal { background: #f1f5f9; color: #475569; }
-    .mode-deep { background: #e0e7ff; color: #4338ca; }
-    .mode-monitor { background: #ede9fe; color: #6d28d9; }
+    .mode-normal { background: #dbeafe; color: #1d4ed8; }
+    .mode-deep { background: #fef3c7; color: #a16207; }
+    .mode-monitor { background: #dcfce7; color: #15803d; }
     .analysis-lead { background: #dcfce7; color: #15803d; }
     .analysis-skipped, .analysis-duplicate { background: #fef3c7; color: #a16207; }
     .analysis-unmatched, .analysis-pending { background: #f1f5f9; color: #64748b; }

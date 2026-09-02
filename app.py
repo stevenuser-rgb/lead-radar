@@ -222,7 +222,7 @@ async def api_activity():
         facebook_message = "Facebook 掃描系統已關閉"
     elif running_jobs:
         current = running_jobs[0]
-        mode_labels = {"normal": "一般抓取", "deep": "深度掃描", "monitor": "持續監控"}
+        mode_labels = {"normal": "一般掃描", "deep": "深度搜尋", "monitor": "登入監控"}
         facebook_status = "running"
         facebook_message = f"#{current['id']} {mode_labels.get(current.get('scan_mode'), '抓取')}執行中"
     elif queued_jobs:
@@ -243,10 +243,10 @@ async def api_activity():
     queued_monitor_jobs = [job for job in queued_jobs if job.get("scan_mode") == "monitor"]
     if not facebook_enabled or not monitor_enabled:
         monitor_status = "disabled"
-        monitor_message = "持續監控目前關閉"
+        monitor_message = "登入監控目前關閉"
     elif deep_scan_active:
         monitor_status = "paused"
-        monitor_message = "深度掃描中，監控暫停"
+        monitor_message = "深度搜尋中，登入監控暫停"
     elif running_monitor_jobs:
         monitor_status = "running"
         monitor_message = f"{len(running_monitor_jobs)} 個監控任務執行中"
@@ -549,7 +549,7 @@ async def api_toggle_facebook_source_monitor(source_id: int, enabled: int = Form
     if not get_facebook_source(source_id):
         return JSONResponse(status_code=404, content={"status": "error", "message": "來源不存在"})
     if get_setting("facebook_monitor_enabled", "0") != "1":
-        return JSONResponse(status_code=403, content={"status": "error", "message": "請先在系統設定啟用 Facebook 持續監控架構"})
+        return JSONResponse(status_code=403, content={"status": "error", "message": "請先在系統設定啟用 Facebook 模式 3「登入監控」"})
     toggle_facebook_source_monitor(source_id, enabled)
     return {"status": "ok"}
 
@@ -567,14 +567,14 @@ async def api_create_facebook_job(source_id: int = Form(...), scan_mode: str = F
         return JSONResponse(status_code=400, content={"status": "error", "message": "抓取模式不正確"})
     active_jobs = get_active_facebook_jobs()
     if scan_mode == "deep" and active_jobs:
-        return JSONResponse(status_code=409, content={"status": "error", "message": "目前已有 Facebook 任務執行中，深度掃描會在其他任務完成後再啟動"})
+        return JSONResponse(status_code=409, content={"status": "error", "message": "目前已有 Facebook 任務執行中，深度搜尋要等其他任務完成後才能啟動"})
     if scan_mode != "deep" and any(job.get("scan_mode") == "deep" for job in active_jobs):
-        return JSONResponse(status_code=409, content={"status": "error", "message": "深度掃描執行中，一般抓取與監控已暫停，請等待深度任務完成"})
+        return JSONResponse(status_code=409, content={"status": "error", "message": "深度搜尋執行中，一般掃描與登入監控已暫停，請等待深度搜尋完成"})
     if scan_mode == "monitor":
         if get_setting("facebook_monitor_enabled", "0") != "1":
-            return JSONResponse(status_code=403, content={"status": "error", "message": "請先在系統設定啟用 Facebook 持續監控架構"})
+            return JSONResponse(status_code=403, content={"status": "error", "message": "請先在系統設定啟用 Facebook 模式 3「登入監控」"})
         if not source.get("monitor_enabled"):
-            return JSONResponse(status_code=400, content={"status": "error", "message": "請先對這個社團開啟監控"})
+            return JSONResponse(status_code=400, content={"status": "error", "message": "請先對這個社團開啟登入監控"})
     recent_jobs = [job for job in get_facebook_jobs(limit=100) if job.get("source_id") == source_id]
     if any(job.get("status") in {"queued", "running"} for job in recent_jobs):
         return JSONResponse(status_code=409, content={"status": "error", "message": "這個社團已有抓取任務執行中，請等待完成"})

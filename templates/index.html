@@ -402,10 +402,10 @@
               </div>
               <div class="flex items-center space-x-2 mb-3">
                 <input type="checkbox" id="cfg-facebook-monitor-enabled" {% if settings.facebook_monitor_enabled == '1' %}checked{% endif %} class="w-4 h-4 text-blue-600 rounded">
-                <label for="cfg-facebook-monitor-enabled" class="text-xs font-semibold text-slate-700">啟用 Facebook 持續監控架構（預設關閉；來源需個別開啟）</label>
+                <label for="cfg-facebook-monitor-enabled" class="text-xs font-semibold text-slate-700">啟用 Facebook 模式 3「登入監控」（預設關閉；社團需個別開啟）</label>
               </div>
               <div class="flex flex-wrap items-center gap-3 mb-3 pl-6">
-                <label class="flex items-center gap-2 text-xs font-semibold text-slate-700"><input type="checkbox" id="cfg-facebook-auto-scan-enabled" {% if settings.facebook_auto_scan_enabled == '1' %}checked{% endif %} class="w-4 h-4 text-blue-600 rounded">啟用 Facebook 自動排程</label>
+                <label class="flex items-center gap-2 text-xs font-semibold text-slate-700"><input type="checkbox" id="cfg-facebook-auto-scan-enabled" {% if settings.facebook_auto_scan_enabled == '1' %}checked{% endif %} class="w-4 h-4 text-blue-600 rounded">啟用模式 1「一般掃描」自動排程</label>
                 <label class="text-xs text-slate-600">頻率
                   <select id="cfg-facebook-interval" class="ml-1 px-2 py-1 bg-white border border-slate-300 rounded">
                     <option value="30" {% if settings.facebook_scan_interval_minutes == '30' %}selected{% endif %}>每 30 分鐘</option>
@@ -416,7 +416,7 @@
                     <option value="1440" {% if settings.facebook_scan_interval_minutes == '1440' %}selected{% endif %}>每天一次</option>
                   </select>
                 </label>
-                <label class="text-xs text-slate-600">監控頻率
+                <label class="text-xs text-slate-600">登入監控頻率
                   <select id="cfg-facebook-monitor-interval" class="ml-1 px-2 py-1 bg-white border border-slate-300 rounded">
                     <option value="30" {% if settings.facebook_monitor_interval_minutes == '30' %}selected{% endif %}>每 30 分鐘</option>
                     <option value="60" {% if settings.facebook_monitor_interval_minutes == '60' %}selected{% endif %}>每 60 分鐘</option>
@@ -431,7 +431,7 @@
                 </label>
               </div>
               <p class="text-[11px] text-slate-400 pl-6">超過保留天數的未命中、略過、重複與錯誤原始貼文會自動清理；命中需求不會清除。</p>
-              <p class="text-[11px] text-slate-400 pl-6">持續監控使用獨立的登入狀態目錄，採固定間隔輪詢最近貼文；不會自動啟用既有社團。</p>
+              <p class="text-[11px] text-slate-400 pl-6">登入監控使用獨立的登入狀態目錄，採固定間隔檢查新貼文；不會自動啟用既有社團。</p>
               <div class="flex items-center space-x-2 mb-2">
                 <input type="checkbox" id="cfg-hours-limit" {% if settings.enable_hours_limit == '1' %}checked{% endif %} class="w-4 h-4 text-indigo-600 rounded">
                 <label for="cfg-hours-limit" class="text-xs font-semibold text-slate-700">限制特定時段才執行掃描（非指定時段暫停）</label>

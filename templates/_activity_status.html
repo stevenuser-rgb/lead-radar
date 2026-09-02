@@ -47,7 +47,7 @@
       <div class="flex items-center justify-between gap-2">
         <div class="flex items-center gap-2 min-w-0">
           <i class="fa-solid fa-binoculars text-violet-600"></i>
-          <h3 class="text-sm font-semibold text-slate-800">持續監控</h3>
+          <h3 class="text-sm font-semibold text-slate-800">登入監控</h3>
         </div>
         <span id="activity-monitor-badge" class="activity-badge activity-disabled">已關閉</span>
       </div>
@@ -86,7 +86,7 @@
       error: '發生錯誤',
       starting: '啟動中',
     };
-    const modeLabels = { normal: '一般', deep: '深度', monitor: '監控' };
+    const modeLabels = { normal: '一般掃描', deep: '深度搜尋', monitor: '登入監控' };
     let activityTimer = null;
     let activityFailures = 0;
 
@@ -140,7 +140,7 @@
         : `自動排程 ${facebook.auto_enabled ? `每 ${facebook.interval_minutes} 分鐘` : '未啟用'}`;
 
       setActivityBadge('activity-monitor-badge', monitor.status);
-      document.getElementById('activity-monitor-detail').textContent = monitor.message || '持續監控目前關閉';
+      document.getElementById('activity-monitor-detail').textContent = monitor.message || '登入監控目前關閉';
       document.getElementById('activity-monitor-meta').textContent = monitor.enabled
         ? `每 ${monitor.interval_minutes} 分鐘 · ${monitor.source_count} 個來源`
         : '一般與深度抓取不受影響';

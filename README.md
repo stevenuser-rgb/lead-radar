@@ -12,19 +12,19 @@
 5. **多管道即時推播**：支援 LINE Notify / LINE Messaging API (Bot)，命中時第一時間通報。
 6. **10 分鐘自動背景排程**：內建非同步排程器，每 10 分鐘自動執行一輪全網檢索與意圖分析。
 7. **Facebook 社團模組**：獨立管理社團來源、抓取任務、runner 日誌與貼文結果；結果頁支援日期、來源、狀態、文字篩選與分頁，完整內容以詳細視窗載入；抓取程式以相鄰的獨立 `facebook-public-group-scraper-standalone` 專案建置，不建立 fork 或原作者依賴。
-8. **背景作業即時狀態**：儀表板與 Facebook 頁面每 5 秒更新 Threads 關鍵字進度、Facebook 任務、持續監控、AI 待分析數與 Runner 連線狀態，不需重新整理頁面。
+8. **背景作業即時狀態**：儀表板與 Facebook 頁面每 5 秒更新 Threads 關鍵字進度、Facebook 任務、登入監控、AI 待分析數與 Runner 連線狀態，不需重新整理頁面。
 
-Facebook 社團來源提供兩種手動任務：一般抓取依來源貼文上限執行；「深度」模式只可由後台手動啟動，最多抓取 500 篇並提高無新貼文停止門檻。自動排程固定使用一般模式，避免無意間增加帳號請求量。
+Facebook 社團來源提供三種清楚分流的任務：一般掃描以匿名模式依來源貼文上限執行；深度搜尋同樣匿名且只可由後台手動啟動，最多抓取 500 篇並提高無新貼文停止門檻；登入監控則使用登入狀態定期檢查新貼文。自動排程固定使用一般掃描，避免無意間增加帳號請求量。
 
-### Facebook 持續監控（可選）
+### Facebook 登入監控（可選）
 
-系統設定中的「Facebook 持續監控架構」預設關閉，開啟後仍須在每個社團來源按「開啟監控」才會生效。監控使用獨立的 Playwright monitor runner、每個來源的持久登入狀態與貼文 ID 基準，只輸出後續新增貼文；新資料仍回到既有 Facebook 貼文、關鍵字比對、AI 分析、命中需求與略過紀錄流程。監控來源不會同時被既有 Facebook 自動排程重複抓取，手動一般／深度任務仍保留。
+系統設定中的 Facebook 模式 3「登入監控」預設關閉，開啟後仍須在每個社團來源按「開啟登入監控」才會生效。登入監控使用獨立的 Playwright monitor runner、每個來源的持久登入狀態與貼文 ID 基準，只輸出後續新增貼文；新資料仍回到既有 Facebook 貼文、關鍵字比對、AI 分析、命中需求與略過紀錄流程。監控來源不會同時被既有 Facebook 自動排程重複抓取，手動一般掃描／深度搜尋仍保留。
 
-深度掃描啟動後會取得全域互斥鎖；一般抓取、自動排程與監控輪詢會暫停，直到深度任務完成或失敗，避免同時增加 Facebook 請求量。
+深度搜尋啟動後會取得全域互斥鎖；一般掃描、自動排程與登入監控會暫停，直到深度任務完成或失敗，避免同時增加 Facebook 請求量。
 
 Cupmen 的 `data/facebook-state` 與 `data/facebook-monitor-output` 僅供容器執行期使用，不要提交到 Git；Cookie 仍放在 `data/facebook-cookies`。
 
-Facebook 頁面支援直接匯入檔名為 `cookies.json` 的登入 Cookie；後台會驗證格式並以權限 `600` 寫入 `data/facebook-cookies/cookies.json`，只有持續監控 Runner 會以 `/app/cookies/cookies.json` 讀取。一般與深度抓取固定使用匿名模式，不會傳送 Cookie。Cookie 不會寫入資料庫或日誌。
+Facebook 頁面支援直接匯入檔名為 `cookies.json` 的登入 Cookie；後台會驗證格式並以權限 `600` 寫入 `data/facebook-cookies/cookies.json`，只有登入監控 Runner 會以 `/app/cookies/cookies.json` 讀取。一般掃描與深度搜尋固定使用匿名模式，不會傳送 Cookie。Cookie 不會寫入資料庫或日誌。
 
 ---
 

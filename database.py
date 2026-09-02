@@ -733,6 +733,30 @@ def get_skipped_logs(limit: int = 50) -> List[Dict[str, Any]]:
     conn.close()
     return rows
 
+def get_skipped_log_page(page: int = 1, page_size: int = 10) -> Dict[str, Any]:
+    page = max(1, page)
+    page_size = max(1, page_size)
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT COUNT(*) FROM skipped_logs")
+    total = cursor.fetchone()[0]
+    pages = max(1, (total + page_size - 1) // page_size)
+    page = min(page, pages)
+    offset = (page - 1) * page_size
+    cursor.execute(
+        "SELECT * FROM skipped_logs ORDER BY id DESC LIMIT ? OFFSET ?",
+        (page_size, offset),
+    )
+    rows = [dict(r) for r in cursor.fetchall()]
+    conn.close()
+    return {
+        "items": rows,
+        "page": page,
+        "page_size": page_size,
+        "pages": pages,
+        "total": total,
+    }
+
 def get_summary_stats() -> Dict[str, Any]:
     conn = get_db()
     cursor = conn.cursor()

@@ -18,7 +18,7 @@ from database import (
     toggle_keyword,
     get_leads,
     update_lead_status,
-    get_skipped_logs,
+    get_skipped_log_page,
     get_summary_stats,
     get_setting,
     set_setting,
@@ -99,7 +99,17 @@ FACEBOOK_KEYWORD_TERMS = (
 async def index(request: Request):
     keywords = get_all_keywords()
     leads = get_leads(limit=30)
-    skipped = get_skipped_logs(limit=30)
+    try:
+        skipped_page_number = max(1, int(request.query_params.get("skipped_page", "1")))
+    except ValueError:
+        skipped_page_number = 1
+    try:
+        skipped_page_size = int(request.query_params.get("skipped_page_size", "10"))
+    except ValueError:
+        skipped_page_size = 10
+    if skipped_page_size not in {10, 25, 50}:
+        skipped_page_size = 10
+    skipped_page = get_skipped_log_page(skipped_page_number, skipped_page_size)
     stats = get_summary_stats()
     settings = {
         "gemini_api_key": get_setting("gemini_api_key"),
@@ -132,7 +142,8 @@ async def index(request: Request):
         context={
             "keywords": keywords,
             "leads": leads,
-            "skipped": skipped,
+            "skipped": skipped_page["items"],
+            "skipped_pagination": skipped_page,
             "stats": stats,
             "settings": settings,
         },

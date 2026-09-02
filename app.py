@@ -53,7 +53,7 @@ from scheduler import (
 )
 from facebook_scheduler import background_facebook_scheduler_loop
 from notifier import send_lead_notification
-from scraper import ThreadsSearchError, fetch_threads_posts, fetch_apify_posts
+from scraper import ThreadsSearchError, fetch_threads_posts, fetch_apify_posts, format_threads_error
 from ai_engine import call_gemini_api
 from ai_engine import analyze_post_intent
 from facebook_runner import (
@@ -98,6 +98,8 @@ FACEBOOK_KEYWORD_TERMS = (
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
     keywords = get_all_keywords()
+    for keyword in keywords:
+        keyword["display_scan_error"] = format_threads_error(keyword.get("last_scan_error", ""))
     leads = get_leads(limit=30)
     try:
         skipped_page_number = max(1, int(request.query_params.get("skipped_page", "1")))

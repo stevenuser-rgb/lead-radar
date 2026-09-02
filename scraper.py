@@ -16,6 +16,20 @@ class ThreadsSearchError(RuntimeError):
     """Threads 搜尋失敗，保留可呈現在儀表板的安全錯誤訊息。"""
 
 
+def format_threads_error(error: str) -> str:
+    """將歷史技術錯誤轉成適合前台顯示的簡短訊息。"""
+    message = (error or "").strip()
+    lowered = message.casefold()
+    if "apify api" in lowered and any(
+        marker in lowered
+        for marker in ("逾時", "timeout", "timed out", "reset by peer", "連線中斷", "連線失敗")
+    ):
+        return "Apify 目前無法連線，請稍後再試"
+    if "threads api http 500" in lowered:
+        return "Threads API 暫時無法完成搜尋"
+    return message[:160]
+
+
 def _request_page(client: httpx.Client, params: Dict[str, Any]) -> Dict[str, Any]:
     last_error = "未知錯誤"
     for attempt in range(3):

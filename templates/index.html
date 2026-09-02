@@ -137,7 +137,9 @@
               {% for kw in keywords %}
               <tr class="hover:bg-slate-50 transition">
                 <td class="px-4 py-3">
-                  {% if kw.is_active %}
+                  {% if settings.scan_enabled != '1' %}
+                  <span class="px-2 py-1 bg-amber-100 text-amber-800 text-xs font-medium rounded-full">系統已暫停</span>
+                  {% elif kw.is_active %}
                   <span class="px-2 py-1 bg-emerald-100 text-emerald-800 text-xs font-medium rounded-full">監控中</span>
                   {% else %}
                   <span class="px-2 py-1 bg-slate-100 text-slate-600 text-xs font-medium rounded-full">已暫停</span>
@@ -151,7 +153,7 @@
                 <td class="px-4 py-3 text-center font-mono text-xs text-slate-400">{{ kw.last_skipped_count }}</td>
                 <td class="px-4 py-3 text-xs">
                   {% if kw.last_scan_status == 'error' %}
-                  <span class="text-rose-700" title="{{ kw.last_scan_error }}">❌ {{ kw.last_scan_error }}</span>
+                  <span class="text-rose-700" title="{{ kw.display_scan_error }}">❌ {{ kw.display_scan_error }}</span>
                   {% elif kw.last_scan_status == 'ok' %}
                   <span class="text-emerald-700">✅ API 正常</span>
                   {% else %}

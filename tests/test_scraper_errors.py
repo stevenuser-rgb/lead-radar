@@ -16,6 +16,14 @@ def _setting(key, default=""):
 
 
 class ApifyErrorMessageTests(unittest.TestCase):
+    def test_formats_historical_transport_errors_for_display(self):
+        historical = "Apify API 連線失敗或逾時: _ssl.c:999: The handshake operation timed out"
+
+        self.assertEqual(
+            scraper.format_threads_error(historical),
+            "Apify 目前無法連線，請稍後再試",
+        )
+
     @patch("scraper.get_setting", side_effect=_setting)
     @patch("scraper.httpx.Client")
     def test_connect_timeout_uses_safe_chinese_message(self, client_class, _get_setting):

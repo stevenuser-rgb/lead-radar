@@ -615,9 +615,13 @@ async def api_test_notify():
 
 @app.post("/api/settings/test-threads")
 async def api_test_threads():
+    source = get_setting("threads_source", "official").strip().lower()
     try:
+        if source == "apify":
+            posts = fetch_apify_posts("台灣")
+            return {"status": "ok", "message": f"Apify Threads 連線成功，測試取得 {len(posts)} 篇公開貼文"}
         posts = fetch_threads_posts("台灣")
-        return {"status": "ok", "message": f"Threads API 連線成功，測試取得 {len(posts)} 篇公開貼文"}
+        return {"status": "ok", "message": f"Meta Threads API 連線成功，測試取得 {len(posts)} 篇公開貼文"}
     except ThreadsSearchError as exc:
         return JSONResponse(status_code=400, content={"status": "error", "message": str(exc)})
 

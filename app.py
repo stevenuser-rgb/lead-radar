@@ -740,12 +740,12 @@ async def api_save_settings(
     set_setting("facebook_auto_scan_enabled", "1" if facebook_auto_scan_enabled == "1" else "0")
     set_setting("facebook_monitor_enabled", "1" if facebook_monitor_enabled == "1" else "0")
     try:
-        facebook_interval = max(30, int(facebook_scan_interval_minutes))
+        facebook_interval = min(10080, max(30, int(facebook_scan_interval_minutes)))
     except ValueError:
         facebook_interval = 60
     set_setting("facebook_scan_interval_minutes", str(facebook_interval))
     try:
-        facebook_monitor_interval = max(30, int(facebook_monitor_interval_minutes))
+        facebook_monitor_interval = min(10080, max(30, int(facebook_monitor_interval_minutes)))
     except ValueError:
         facebook_monitor_interval = 60
     set_setting("facebook_monitor_interval_minutes", str(facebook_monitor_interval))
@@ -754,7 +754,11 @@ async def api_save_settings(
     except ValueError:
         facebook_retention = 90
     set_setting("facebook_retention_days", str(facebook_retention))
-    set_setting("scan_interval_minutes", scan_interval_minutes.strip())
+    try:
+        scan_interval = min(1440, max(1, int(scan_interval_minutes)))
+    except ValueError:
+        scan_interval = 10
+    set_setting("scan_interval_minutes", str(scan_interval))
     set_setting("enable_hours_limit", enable_hours_limit.strip())
     set_setting("active_start_hour", active_start_hour.strip())
     set_setting("active_end_hour", active_end_hour.strip())

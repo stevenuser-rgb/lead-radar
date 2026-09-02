@@ -111,7 +111,8 @@ def fetch_apify_posts(keyword: str) -> List[Dict[str, Any]]:
     }
     url = APIFY_RUN_URL.format(actor_id=actor_id)
     try:
-        with httpx.Client(timeout=180.0, follow_redirects=True) as client:
+        timeout = httpx.Timeout(connect=15.0, read=180.0, write=30.0, pool=30.0)
+        with httpx.Client(timeout=timeout, follow_redirects=True) as client:
             response = client.post(
                 url,
                 params={"format": "json", "clean": "true"},
@@ -123,8 +124,14 @@ def fetch_apify_posts(keyword: str) -> List[Dict[str, Any]]:
                 detail = response.text[:300]
                 raise ThreadsSearchError(f"Apify API HTTP {response.status_code}: {detail}")
             items = response.json()
+    except httpx.ConnectTimeout as exc:
+        raise ThreadsSearchError("Apify API 連線逾時") from exc
+    except httpx.ReadTimeout as exc:
+        raise ThreadsSearchError("Apify API 回應逾時") from exc
+    except httpx.ConnectError as exc:
+        raise ThreadsSearchError("Apify API 連線中斷") from exc
     except httpx.HTTPError as exc:
-        raise ThreadsSearchError(f"Apify API 連線失敗或逾時: {exc}") from exc
+        raise ThreadsSearchError("Apify API 連線失敗") from exc
 
     posts: List[Dict[str, Any]] = []
     for item in items if isinstance(items, list) else items.get("data", []):

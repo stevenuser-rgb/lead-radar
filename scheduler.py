@@ -13,7 +13,7 @@ from database import (
     get_setting,
     set_setting
 )
-from scraper import fetch_threads_posts, fetch_apify_posts
+from scraper import ThreadsSearchError, fetch_threads_posts, fetch_apify_posts
 from ai_engine import analyze_post_intent
 from notifier import send_lead_notification
 
@@ -154,8 +154,8 @@ async def run_scan_cycle(force: bool = False):
                 message=f"正在掃描：{keyword}",
             )
             print(f"--> 正在掃描關鍵字: 【{keyword}】")
+            source = get_setting("threads_source", "official").strip().lower()
             try:
-                source = get_setting("threads_source", "official").strip().lower()
                 fetcher = fetch_apify_posts if source == "apify" else fetch_threads_posts
                 raw_posts = await asyncio.to_thread(fetcher, keyword)
             except Exception as exc:
@@ -167,6 +167,10 @@ async def run_scan_cycle(force: bool = False):
                     message=f"{keyword} 掃描失敗，繼續下一組",
                 )
                 print(f"    ❌ [Threads Search] {error_message}")
+                if source == "apify" and isinstance(exc, ThreadsSearchError):
+                    cycle_error = f"Apify 來源暫時無法使用，已停止本輪掃描：{error_message}"
+                    _update_scan_runtime(phase="error", message=cycle_error)
+                    break
                 continue
             
             scanned_count = len(raw_posts)

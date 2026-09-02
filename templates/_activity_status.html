@@ -1,0 +1,188 @@
+<section id="activity-panel" aria-label="背景作業狀態" aria-live="polite" class="bg-white border border-slate-200 shadow-sm rounded-lg overflow-hidden">
+  <div class="px-4 py-3 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2">
+    <div class="flex items-center gap-2 min-w-0">
+      <span class="relative flex h-2.5 w-2.5 shrink-0">
+        <span id="activity-live-pulse" class="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-60"></span>
+        <span id="activity-live-dot" class="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+      </span>
+      <div class="min-w-0">
+        <h2 class="text-sm font-bold text-slate-900">背景作業</h2>
+        <p id="activity-updated" class="text-[11px] text-slate-500 truncate">正在取得最新狀態…</p>
+      </div>
+    </div>
+    <span id="activity-runner" class="activity-badge activity-waiting">Runner 檢查中</span>
+  </div>
+
+  <div class="grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-slate-200">
+    <div class="p-4 min-w-0">
+      <div class="flex items-center justify-between gap-2">
+        <div class="flex items-center gap-2 min-w-0">
+          <i class="fa-solid fa-magnifying-glass text-indigo-600"></i>
+          <h3 class="text-sm font-semibold text-slate-800">Threads 掃描</h3>
+        </div>
+        <span id="activity-threads-badge" class="activity-badge activity-waiting">等待中</span>
+      </div>
+      <p id="activity-threads-detail" class="mt-2 text-sm text-slate-700 min-h-10 break-words">等待排程狀態</p>
+      <div id="activity-threads-progress-wrap" class="mt-2 hidden">
+        <div class="h-1.5 rounded-full bg-slate-100 overflow-hidden">
+          <div id="activity-threads-progress" class="h-full bg-indigo-600 transition-all duration-300" style="width: 0%"></div>
+        </div>
+      </div>
+      <p id="activity-threads-meta" class="mt-2 text-[11px] text-slate-500 break-words">讀取中…</p>
+    </div>
+
+    <div class="p-4 min-w-0">
+      <div class="flex items-center justify-between gap-2">
+        <div class="flex items-center gap-2 min-w-0">
+          <i class="fa-brands fa-facebook text-blue-600"></i>
+          <h3 class="text-sm font-semibold text-slate-800">Facebook 抓取</h3>
+        </div>
+        <span id="activity-facebook-badge" class="activity-badge activity-waiting">等待中</span>
+      </div>
+      <p id="activity-facebook-detail" class="mt-2 text-sm text-slate-700 min-h-10 break-words">等待任務狀態</p>
+      <p id="activity-facebook-meta" class="mt-2 text-[11px] text-slate-500 break-words">讀取中…</p>
+    </div>
+
+    <div class="p-4 min-w-0">
+      <div class="flex items-center justify-between gap-2">
+        <div class="flex items-center gap-2 min-w-0">
+          <i class="fa-solid fa-binoculars text-violet-600"></i>
+          <h3 class="text-sm font-semibold text-slate-800">持續監控</h3>
+        </div>
+        <span id="activity-monitor-badge" class="activity-badge activity-disabled">已關閉</span>
+      </div>
+      <p id="activity-monitor-detail" class="mt-2 text-sm text-slate-700 min-h-10 break-words">等待監控狀態</p>
+      <p id="activity-monitor-meta" class="mt-2 text-[11px] text-slate-500 break-words">讀取中…</p>
+    </div>
+  </div>
+
+  <div class="px-4 py-2.5 border-t border-slate-200 bg-slate-50 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 text-[11px] text-slate-500">
+    <span id="activity-analysis">分析狀態讀取中…</span>
+    <span id="activity-recent" class="sm:text-right break-words">最近動作讀取中…</span>
+  </div>
+</section>
+
+<style>
+  .activity-badge { display: inline-flex; align-items: center; flex-shrink: 0; border-radius: 9999px; padding: 0.2rem 0.55rem; font-size: 0.6875rem; font-weight: 700; line-height: 1rem; }
+  .activity-running { background: #dbeafe; color: #1d4ed8; }
+  .activity-running::before { content: ''; width: 0.55rem; height: 0.55rem; margin-right: 0.35rem; border: 2px solid currentColor; border-top-color: transparent; border-radius: 9999px; animation: activity-spin 0.8s linear infinite; }
+  .activity-waiting { background: #dcfce7; color: #15803d; }
+  .activity-idle { background: #f1f5f9; color: #475569; }
+  .activity-paused, .activity-warning { background: #fef3c7; color: #a16207; }
+  .activity-disabled { background: #e2e8f0; color: #64748b; }
+  .activity-error { background: #fee2e2; color: #b91c1c; }
+  @keyframes activity-spin { to { transform: rotate(360deg); } }
+</style>
+
+<script>
+  (() => {
+    const statusLabels = {
+      running: '執行中',
+      waiting: '等待中',
+      idle: '手動模式',
+      paused: '已暫停',
+      warning: '部分異常',
+      disabled: '已關閉',
+      error: '發生錯誤',
+      starting: '啟動中',
+    };
+    const modeLabels = { normal: '一般', deep: '深度', monitor: '監控' };
+    let activityTimer = null;
+    let activityFailures = 0;
+
+    function setActivityBadge(id, status, overrideText = '') {
+      const element = document.getElementById(id);
+      if (!element) return;
+      const safeStatus = statusLabels[status] ? status : 'idle';
+      element.className = `activity-badge activity-${safeStatus}`;
+      element.textContent = overrideText || statusLabels[safeStatus];
+    }
+
+    function formatActivityTime(value) {
+      if (!value || value === '尚未執行' || value === '計算中...') return value || '尚未執行';
+      const parsed = new Date(value.includes('T') ? value : value.replace(' ', 'T'));
+      if (Number.isNaN(parsed.getTime())) return value;
+      return new Intl.DateTimeFormat('zh-TW', {
+        month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+      }).format(parsed);
+    }
+
+    function renderActivity(data) {
+      const threads = data.threads;
+      const facebook = data.facebook;
+      const monitor = data.monitor;
+      const analysis = data.analysis;
+      const runner = data.runner;
+
+      document.getElementById('activity-live-dot').className = 'relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500';
+      document.getElementById('activity-live-pulse').className = 'absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-60';
+      document.getElementById('activity-updated').textContent = `即時更新 ${formatActivityTime(data.generated_at)}`;
+      setActivityBadge('activity-runner', runner.available ? 'waiting' : 'error', runner.available ? 'Runner 已連線' : 'Runner 未連線');
+
+      setActivityBadge('activity-threads-badge', threads.status);
+      document.getElementById('activity-threads-detail').textContent = threads.message || '等待下一次排程';
+      const progressWrap = document.getElementById('activity-threads-progress-wrap');
+      const progress = document.getElementById('activity-threads-progress');
+      const totalKeywords = Number(threads.total_keywords || 0);
+      const currentIndex = Number(threads.current_index || 0);
+      progressWrap.classList.toggle('hidden', !threads.running || totalKeywords <= 0);
+      progress.style.width = totalKeywords > 0 ? `${Math.min(100, Math.round(currentIndex / totalKeywords * 100))}%` : '0%';
+      const sourceName = threads.source === 'apify' ? 'Apify' : 'Meta 官方 API';
+      document.getElementById('activity-threads-meta').textContent = threads.running
+        ? `${sourceName} · ${currentIndex}/${totalKeywords} 組 · 已取得 ${threads.scanned_posts || 0} 篇 · 命中 ${threads.hit_count || 0} 篇`
+        : `${sourceName} · 上次 ${formatActivityTime(threads.last_scan_time)} · 下次 ${formatActivityTime(threads.next_scan_time)}`;
+
+      setActivityBadge('activity-facebook-badge', facebook.status);
+      document.getElementById('activity-facebook-detail').textContent = facebook.message || '沒有執行中的任務';
+      const latestJob = facebook.latest_job;
+      document.getElementById('activity-facebook-meta').textContent = latestJob
+        ? `最近 #${latestJob.id} ${modeLabels[latestJob.mode] || latestJob.mode} · ${latestJob.status} · ${formatActivityTime(latestJob.created_at)}`
+        : `自動排程 ${facebook.auto_enabled ? `每 ${facebook.interval_minutes} 分鐘` : '未啟用'}`;
+
+      setActivityBadge('activity-monitor-badge', monitor.status);
+      document.getElementById('activity-monitor-detail').textContent = monitor.message || '持續監控目前關閉';
+      document.getElementById('activity-monitor-meta').textContent = monitor.enabled
+        ? `每 ${monitor.interval_minutes} 分鐘 · ${monitor.source_count} 個來源`
+        : '一般與深度抓取不受影響';
+
+      document.getElementById('activity-analysis').textContent = `AI 分析：${analysis.running_jobs} 個任務處理中 · ${analysis.pending_posts} 篇待分析 · ${analysis.error_posts} 篇錯誤`;
+      document.getElementById('activity-recent').textContent = latestJob
+        ? `最近動作：Facebook #${latestJob.id} ${latestJob.status}`
+        : `最近動作：Threads ${formatActivityTime(threads.completed_at || threads.last_scan_time)}`;
+
+      const scanButton = document.getElementById('scan-btn');
+      if (scanButton) {
+        scanButton.disabled = Boolean(threads.running) || !threads.enabled;
+        scanButton.classList.toggle('opacity-60', scanButton.disabled);
+        scanButton.innerHTML = threads.running
+          ? '<i class="fa-solid fa-spinner fa-spin"></i><span class="hidden sm:inline">掃描中</span>'
+          : '<i class="fa-solid fa-rotate"></i><span class="hidden sm:inline">即刻執行掃描</span>';
+      }
+    }
+
+    async function refreshActivity() {
+      if (document.hidden) return;
+      try {
+        const response = await fetch('/api/activity', { cache: 'no-store' });
+        if (!response.ok) throw new Error('status unavailable');
+        renderActivity(await response.json());
+        activityFailures = 0;
+      } catch (_) {
+        activityFailures += 1;
+        document.getElementById('activity-updated').textContent = '狀態暫時無法取得，系統會自動重試';
+        document.getElementById('activity-live-dot').className = 'relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500';
+        document.getElementById('activity-live-pulse').className = 'absolute inline-flex h-full w-full rounded-full bg-red-300 opacity-60';
+      } finally {
+        clearTimeout(activityTimer);
+        const retryDelay = activityFailures ? Math.min(30000, 5000 * (2 ** Math.min(activityFailures - 1, 3))) : 5000;
+        activityTimer = setTimeout(refreshActivity, retryDelay);
+      }
+    }
+
+    window.refreshActivity = refreshActivity;
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) refreshActivity();
+    });
+    refreshActivity();
+  })();
+</script>

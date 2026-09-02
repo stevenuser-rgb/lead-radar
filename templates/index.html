@@ -48,6 +48,8 @@
   <!-- 主內容容器 -->
   <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
 
+    {% include "_activity_status.html" %}
+
     <!-- 頂部統計指標卡片 -->
     <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
       <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
@@ -515,10 +517,11 @@
       try {
         const resp = await fetch('/api/scan', { method: 'POST' });
         const res = await resp.json();
+        if (!resp.ok) throw new Error(res.message || '掃描發起失敗');
         alert('✅ ' + res.message);
-        setTimeout(() => location.reload(), 1500);
+        window.refreshActivity?.();
       } catch (err) {
-        alert('❌ 掃描發起失敗: ' + err);
+        alert('❌ ' + err.message);
         btn.innerHTML = originalText;
         btn.disabled = false;
       }

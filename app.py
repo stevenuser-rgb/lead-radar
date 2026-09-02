@@ -2,6 +2,7 @@ import asyncio
 import os
 import datetime
 import re
+import time
 from pathlib import Path
 from urllib.parse import urlparse
 from contextlib import asynccontextmanager
@@ -42,7 +43,14 @@ from database import (
     save_lead,
     save_skipped,
 )
-from scheduler import background_scheduler_loop, run_scan_cycle, get_next_scan_time_str
+from scheduler import (
+    background_scheduler_loop,
+    get_next_scan_time_str,
+    get_scan_runtime_status,
+    is_within_active_hours,
+    request_scan_start,
+    run_scan_cycle,
+)
 from facebook_scheduler import background_facebook_scheduler_loop
 from notifier import send_lead_notification
 from scraper import ThreadsSearchError, fetch_threads_posts, fetch_apify_posts
@@ -76,6 +84,8 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="私有需求雷達 (Lead Radar)", lifespan=lifespan)
 templates = Jinja2Templates(directory="templates")
 FACEBOOK_ANALYSIS_JOBS = set()
+RUNNER_HEALTH_CACHE = {"available": False, "checked_at": 0.0}
+RUNNER_HEALTH_LOCK = asyncio.Lock()
 FACEBOOK_MAX_POSTS = 500
 FACEBOOK_DEEP_NO_NEW_POST_CYCLES = 10
 FACEBOOK_MIN_JOB_INTERVAL_MINUTES = max(1, int(os.getenv("FACEBOOK_MIN_JOB_INTERVAL_MINUTES", "30")))
@@ -127,6 +137,147 @@ async def index(request: Request):
             "settings": settings,
         },
     )
+
+
+def _activity_job(job: dict) -> dict:
+    return {
+        "id": job.get("id"),
+        "source_name": job.get("source_name") or f"來源 #{job.get('source_id', '')}",
+        "mode": job.get("scan_mode") or "normal",
+        "status": job.get("status") or "queued",
+        "created_at": job.get("created_at") or "",
+        "started_at": job.get("started_at") or "",
+        "finished_at": job.get("finished_at") or "",
+    }
+
+
+async def _cached_runner_available() -> bool:
+    now = time.monotonic()
+    if now - RUNNER_HEALTH_CACHE["checked_at"] < 15:
+        return bool(RUNNER_HEALTH_CACHE["available"])
+    async with RUNNER_HEALTH_LOCK:
+        now = time.monotonic()
+        if now - RUNNER_HEALTH_CACHE["checked_at"] >= 15:
+            RUNNER_HEALTH_CACHE["available"] = await asyncio.to_thread(lambda: runner_health() is not None)
+            RUNNER_HEALTH_CACHE["checked_at"] = now
+    return bool(RUNNER_HEALTH_CACHE["available"])
+
+
+@app.get("/api/activity")
+async def api_activity():
+    threads = get_scan_runtime_status()
+    threads_enabled = get_setting("scan_enabled", "1") == "1"
+    try:
+        within_active_hours = is_within_active_hours()
+    except (TypeError, ValueError):
+        within_active_hours = True
+
+    if not threads_enabled:
+        threads.update(status="disabled", phase="disabled", running=False, message="Threads 掃描系統已關閉")
+    elif not threads.get("running") and not within_active_hours:
+        threads.update(status="paused", phase="paused", message="目前不在設定的掃描時段")
+    elif threads.get("status") == "starting":
+        threads.update(status="waiting", message="等待下一次排程")
+    threads.update(
+        enabled=threads_enabled,
+        source=get_setting("threads_source", "official").strip().lower(),
+        last_scan_time=get_setting("last_global_scan_time", "尚未執行"),
+        next_scan_time=get_next_scan_time_str(),
+        within_active_hours=within_active_hours,
+    )
+
+    jobs = get_facebook_jobs(limit=8)
+    sources = get_facebook_sources()
+    source_names = {source["id"]: source.get("name") or f"來源 #{source['id']}" for source in sources}
+    active_jobs = []
+    for active_job in get_active_facebook_jobs():
+        active_job = dict(active_job)
+        active_job["source_name"] = source_names.get(active_job.get("source_id"), f"來源 #{active_job.get('source_id', '')}")
+        active_jobs.append(active_job)
+    active_payload = [_activity_job(job) for job in active_jobs]
+    facebook_enabled = get_setting("facebook_scan_enabled", "1") == "1"
+    facebook_auto_enabled = get_setting("facebook_auto_scan_enabled", "0") == "1"
+    monitor_enabled = get_setting("facebook_monitor_enabled", "0") == "1"
+    monitored_sources = sum(
+        1 for source in sources if source.get("is_active") and source.get("monitor_enabled")
+    )
+    analysis_jobs = len(FACEBOOK_ANALYSIS_JOBS)
+    post_summary = get_facebook_post_summary(days=0)
+
+    running_jobs = [job for job in active_jobs if job.get("status") == "running"]
+    queued_jobs = [job for job in active_jobs if job.get("status") == "queued"]
+    if not facebook_enabled:
+        facebook_status = "disabled"
+        facebook_message = "Facebook 掃描系統已關閉"
+    elif running_jobs:
+        current = running_jobs[0]
+        mode_labels = {"normal": "一般抓取", "deep": "深度掃描", "monitor": "持續監控"}
+        facebook_status = "running"
+        facebook_message = f"#{current['id']} {mode_labels.get(current.get('scan_mode'), '抓取')}執行中"
+    elif queued_jobs:
+        facebook_status = "waiting"
+        facebook_message = f"#{queued_jobs[0]['id']} 等待 Runner 接手"
+    elif analysis_jobs:
+        facebook_status = "running"
+        facebook_message = f"正在分析 {analysis_jobs} 個已完成任務"
+    elif facebook_auto_enabled:
+        facebook_status = "waiting"
+        facebook_message = "等待下一次自動排程"
+    else:
+        facebook_status = "idle"
+        facebook_message = "手動模式，沒有執行中的任務"
+
+    deep_scan_active = any(job.get("scan_mode") == "deep" for job in active_jobs)
+    running_monitor_jobs = [job for job in running_jobs if job.get("scan_mode") == "monitor"]
+    queued_monitor_jobs = [job for job in queued_jobs if job.get("scan_mode") == "monitor"]
+    if not facebook_enabled or not monitor_enabled:
+        monitor_status = "disabled"
+        monitor_message = "持續監控目前關閉"
+    elif deep_scan_active:
+        monitor_status = "paused"
+        monitor_message = "深度掃描中，監控暫停"
+    elif running_monitor_jobs:
+        monitor_status = "running"
+        monitor_message = f"{len(running_monitor_jobs)} 個監控任務執行中"
+    elif queued_monitor_jobs:
+        monitor_status = "waiting"
+        monitor_message = f"{len(queued_monitor_jobs)} 個監控任務等待中"
+    elif monitored_sources:
+        monitor_status = "waiting"
+        monitor_message = f"監控 {monitored_sources} 個來源，等待排程"
+    else:
+        monitor_status = "paused"
+        monitor_message = "尚未對任何來源開啟監控"
+
+    runner_available = await _cached_runner_available()
+    return {
+        "status": "ok",
+        "generated_at": datetime.datetime.now().astimezone().isoformat(timespec="seconds"),
+        "runner": {"available": runner_available},
+        "threads": threads,
+        "facebook": {
+            "enabled": facebook_enabled,
+            "auto_enabled": facebook_auto_enabled,
+            "status": facebook_status,
+            "message": facebook_message,
+            "interval_minutes": get_setting("facebook_scan_interval_minutes", "60"),
+            "active_jobs": active_payload,
+            "latest_job": _activity_job(jobs[0]) if jobs else None,
+        },
+        "monitor": {
+            "enabled": monitor_enabled,
+            "status": monitor_status,
+            "message": monitor_message,
+            "interval_minutes": get_setting("facebook_monitor_interval_minutes", "60"),
+            "source_count": monitored_sources,
+        },
+        "analysis": {
+            "running_jobs": analysis_jobs,
+            "pending_posts": post_summary["pending"],
+            "error_posts": post_summary["errors"],
+        },
+        "recent_jobs": [_activity_job(job) for job in jobs[:5]],
+    }
 
 
 def _normalize_facebook_group_url(group_url: str) -> str:
@@ -488,6 +639,8 @@ async def api_cancel_facebook_job(job_id: int):
 async def trigger_scan(background_tasks: BackgroundTasks):
     if get_setting("scan_enabled", "1") != "1":
         return JSONResponse(status_code=400, content={"status": "error", "message": "掃描系統目前已關閉，請先在後台重新開啟"})
+    if not request_scan_start():
+        return JSONResponse(status_code=409, content={"status": "error", "message": "Threads 掃描正在執行，請查看背景作業進度"})
     background_tasks.add_task(run_scan_cycle, force=True)
     return {"status": "ok", "message": "已在背景啟動即時掃描"}
 

@@ -18,7 +18,54 @@ from ai_engine import analyze_post_intent
 from notifier import send_lead_notification
 
 IS_SCANNING = False
+SCAN_REQUESTED = False
 NEXT_SCAN_TIMESTAMP = 0
+SCAN_RUNTIME = {
+    "status": "starting",
+    "phase": "starting",
+    "running": False,
+    "trigger": "scheduled",
+    "started_at": "",
+    "completed_at": "",
+    "current_keyword": "",
+    "current_index": 0,
+    "total_keywords": 0,
+    "scanned_posts": 0,
+    "hit_count": 0,
+    "skipped_count": 0,
+    "error_count": 0,
+    "message": "排程啟動中",
+    "updated_at": "",
+}
+
+
+def _runtime_timestamp() -> str:
+    return time.strftime("%Y-%m-%d %H:%M:%S")
+
+
+def _update_scan_runtime(**changes):
+    changes["updated_at"] = _runtime_timestamp()
+    SCAN_RUNTIME.update(changes)
+
+
+def get_scan_runtime_status() -> dict:
+    return dict(SCAN_RUNTIME)
+
+
+def request_scan_start() -> bool:
+    """Reserve one manual scan before FastAPI starts its background task."""
+    global SCAN_REQUESTED
+    if IS_SCANNING or SCAN_REQUESTED:
+        return False
+    SCAN_REQUESTED = True
+    _update_scan_runtime(
+        status="running",
+        phase="queued",
+        running=True,
+        trigger="manual",
+        message="手動掃描已排入，正在準備執行",
+    )
+    return True
 
 def get_next_scan_time_str() -> str:
     """取得下次預計掃描時間字串"""
@@ -47,45 +94,88 @@ async def run_scan_cycle(force: bool = False):
     """
     執行單次全關鍵字掃描作業（具備嚴密的三層防重複機制）
     """
-    global IS_SCANNING
+    global IS_SCANNING, SCAN_REQUESTED
     if get_setting("scan_enabled", "1") != "1":
+        if force:
+            SCAN_REQUESTED = False
+        _update_scan_runtime(status="disabled", phase="disabled", running=False, message="Threads 掃描系統已關閉")
         print("[Scheduler] 掃描系統目前已關閉，本次略過。")
         return
     if IS_SCANNING:
+        if force:
+            SCAN_REQUESTED = False
         print("[Scheduler] 上一輪掃描仍在執行中，本次略過。")
+        return
+    if SCAN_REQUESTED and not force:
+        print("[Scheduler] 手動掃描已排入，本次自動排程略過。")
         return
         
     if not force and not is_within_active_hours():
+        _update_scan_runtime(status="paused", phase="paused", running=False, message="目前不在設定的掃描時段")
         print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] ⏸️ 目前非設定之掃描營運時段，暫停自動掃描。")
         return
 
+    SCAN_REQUESTED = False
     IS_SCANNING = True
+    _update_scan_runtime(
+        status="running",
+        phase="preparing",
+        running=True,
+        trigger="manual" if force else "scheduled",
+        started_at=_runtime_timestamp(),
+        current_keyword="",
+        current_index=0,
+        total_keywords=0,
+        scanned_posts=0,
+        hit_count=0,
+        skipped_count=0,
+        error_count=0,
+        message="正在準備掃描關鍵字",
+    )
     print(f"\n[{time.strftime('%Y-%m-%d %H:%M:%S')}] 🚀 開始執行需求雷達掃描作業...")
-    
+
+    cycle_error = ""
     try:
         # 1. 載入記憶體層快取（第一層快篩）
         processed_cache = get_all_processed_ids_set()
         current_run_seen_posts = set() # 當次循環跨關鍵字去重集合
         
         active_keywords = get_all_keywords(active_only=True)
-        for item in active_keywords:
+        _update_scan_runtime(total_keywords=len(active_keywords))
+        for keyword_index, item in enumerate(active_keywords, start=1):
             kw_id = item["id"]
             keyword = item["keyword"]
             desc = item["business_description"] or ""
-            
+
+            _update_scan_runtime(
+                phase="searching",
+                current_keyword=keyword,
+                current_index=keyword_index,
+                message=f"正在掃描：{keyword}",
+            )
             print(f"--> 正在掃描關鍵字: 【{keyword}】")
             try:
                 source = get_setting("threads_source", "official").strip().lower()
-                raw_posts = fetch_apify_posts(keyword) if source == "apify" else fetch_threads_posts(keyword)
+                fetcher = fetch_apify_posts if source == "apify" else fetch_threads_posts
+                raw_posts = await asyncio.to_thread(fetcher, keyword)
             except Exception as exc:
                 error_message = str(exc)
                 update_keyword_metrics(kw_id, 0, 0, 0, status="error", error=error_message)
+                _update_scan_runtime(
+                    phase="searching",
+                    error_count=SCAN_RUNTIME["error_count"] + 1,
+                    message=f"{keyword} 掃描失敗，繼續下一組",
+                )
                 print(f"    ❌ [Threads Search] {error_message}")
                 continue
             
             scanned_count = len(raw_posts)
             hit_count = 0
             skipped_count = 0
+            _update_scan_runtime(
+                phase="analyzing",
+                message=f"正在比對與分析：{keyword}（取得 {scanned_count} 篇）",
+            )
             
             for post in raw_posts:
                 post_id = post.get("post_id", "")
@@ -114,7 +204,7 @@ async def run_scan_cycle(force: bool = False):
                 current_run_seen_posts.add(content_hash)
                 
                 # 呼叫 AI 意圖分析
-                ai_result = analyze_post_intent(content, keyword, desc)
+                ai_result = await asyncio.to_thread(analyze_post_intent, content, keyword, desc)
                 
                 try:
                     confidence_threshold = float(get_setting("confidence_threshold", "0.75"))
@@ -148,7 +238,7 @@ async def run_scan_cycle(force: bool = False):
                     saved = save_lead(lead_dict)
                     if saved:
                         # 僅在資料庫真正寫入成功時，才觸發 LINE 即時推播，杜絕重複通知
-                        send_lead_notification(lead_dict)
+                        await asyncio.to_thread(send_lead_notification, lead_dict)
                         hit_count += 1
                         print(f"    🎯 [命中新商機] {post.get('author')}: {post_url}")
                     else:
@@ -174,16 +264,45 @@ async def run_scan_cycle(force: bool = False):
                     
             # 更新資料庫關鍵字指標數據
             update_keyword_metrics(kw_id, scanned_count, hit_count, skipped_count, status="ok")
+            _update_scan_runtime(
+                phase="searching",
+                scanned_posts=SCAN_RUNTIME["scanned_posts"] + scanned_count,
+                hit_count=SCAN_RUNTIME["hit_count"] + hit_count,
+                skipped_count=SCAN_RUNTIME["skipped_count"] + skipped_count,
+                message=f"{keyword} 完成，準備下一組",
+            )
             await asyncio.sleep(1)
             
         # 自動清理超過 30 天的舊紀錄
         clean_expired_records(days=30)
             
     except Exception as e:
+        cycle_error = str(e)
         print(f"[Scheduler Error] 掃描發生異常: {e}")
     finally:
         IS_SCANNING = False
-        set_setting("last_global_scan_time", time.strftime("%Y-%m-%d %H:%M:%S"))
+        completed_at = _runtime_timestamp()
+        set_setting("last_global_scan_time", completed_at)
+        if cycle_error:
+            status = "error"
+            message = f"掃描中斷：{cycle_error[:120]}"
+        elif SCAN_RUNTIME["error_count"]:
+            status = "warning"
+            message = f"掃描完成，{SCAN_RUNTIME['error_count']} 組關鍵字失敗"
+        else:
+            status = "waiting"
+            message = (
+                f"掃描完成：{SCAN_RUNTIME['scanned_posts']} 篇、"
+                f"命中 {SCAN_RUNTIME['hit_count']} 篇"
+            )
+        _update_scan_runtime(
+            status=status,
+            phase="completed" if status in {"waiting", "warning"} else "error",
+            running=False,
+            completed_at=completed_at,
+            current_keyword="",
+            message=message,
+        )
         print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] ✅ 需求雷達掃描作業完成。\n")
 
 
